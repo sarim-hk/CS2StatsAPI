@@ -15,7 +15,7 @@ class Config:
 
     def create_config(self):
         if (not os.path.isfile("CS2StatsAPI.json")):
-            shutil.copy("CS2StatsAPITemplate.json", "CS2StatsAPI.json")
+            shutil.copy("resources/CS2StatsAPITemplate.json", "CS2StatsAPI.json")
             print("Config file created 'CS2StatsAPI.json'. Enter your MySQL credentials and re-run.")
             exit()
 

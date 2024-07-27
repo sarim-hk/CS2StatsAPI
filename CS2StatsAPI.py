@@ -1,10 +1,36 @@
-from functools import wraps
 from Config import Config
-from flask import Flask, jsonify, request
+from Utilities import get_steam_summaries
+
+from functools import wraps
+from flask import Flask, jsonify, request, g
+from flask_cors import CORS
+
 from mysql.connector import Error
 import mysql.connector
 
 app = Flask(__name__)
+CORS(app)
+
+def get_db_connection():
+    if 'db' not in g:
+        cfg = Config()
+        g.db = mysql.connector.connect(
+            host=cfg.cfg["MySQLServer"],
+            database=cfg.cfg["MySQLDatabase"],
+            user=cfg.cfg["MySQLUsername"],
+            password=cfg.cfg["MySQLPassword"]
+        )
+    return g.db
+
+@app.before_request
+def before_request():
+    g.db = get_db_connection()
+
+@app.teardown_request
+def teardown_request(exception):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
 
 def require_api_key(f):
     @wraps(f)
@@ -23,10 +49,20 @@ def get_matches_or_match():
     
     cursor = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = g.db.cursor(dictionary=True)
+        
+        columns = """
+            MatchID,
+            Map,
+            TeamTID,
+            TeamCTID,
+            TeamTScore,
+            TeamCTScore,
+            DATE_FORMAT(MatchDate, '%d/%m/%Y %H:%i:%s') AS MatchDate
+        """
         
         if match_id:
-            cursor.execute("SELECT * FROM `Match` WHERE MatchID = %s", (match_id,))
+            cursor.execute(f"SELECT {columns} FROM `Match` WHERE MatchID = %s", (match_id,))
             match = cursor.fetchone()
             if match:
                 return jsonify(match)
@@ -34,12 +70,12 @@ def get_matches_or_match():
                 return jsonify({"error": "Match not found."}), 404
         
         elif map_name:
-            cursor.execute("SELECT * FROM `Match` WHERE Map = %s", (map_name,))
+            cursor.execute(f"SELECT {columns} FROM `Match` WHERE Map = %s", (map_name,))
             matches = cursor.fetchall()
             return jsonify(matches)
         
         else:
-            cursor.execute("SELECT * FROM `Match`")
+            cursor.execute(f"SELECT {columns} FROM `Match`")
             matches = cursor.fetchall()
             return jsonify(matches)
     
@@ -54,24 +90,30 @@ def get_matches_or_match():
 @app.route("/api/get_players_or_player")
 @require_api_key
 def get_players_or_player():
-    player_id = request.args.get("player_id")
-    
     cursor = None
+    player_id = request.args.get("player_id")
     try:
-        cursor = connection.cursor(dictionary=True)
-        
+        cursor = g.db.cursor(dictionary=True)
+
         if player_id:
             cursor.execute("SELECT * FROM `Player` WHERE PlayerID = %s", (player_id,))
-            player = cursor.fetchone()
-            if player:
-                return jsonify(player)
-            else:
-                return jsonify({"error": "Player not found."}), 404
-        
-        else:
-            cursor.execute("SELECT * FROM `Player`")
             players = cursor.fetchall()
-            return jsonify(players)
+        else:
+            cursor.execute("SELECT * FROM `Player` ORDER BY `ELO` DESC")
+            players = cursor.fetchall()
+        
+        if not players:
+            return jsonify({"error": "Player(s) not found."}), 404
+
+        steam_ids = [str(player["PlayerID"]) for player in players]
+        steam_summaries = get_steam_summaries(steam_ids, cfg.cfg["STEAM_API_KEY"])
+        
+        for player in players:
+            steam_summary = steam_summaries.get(str(player["PlayerID"]), {})
+            player["Avatar"] = steam_summary["avatarmedium"]
+            player["Username"] = steam_summary["personaname"]
+
+        return jsonify(players)
     
     except Error as e:
         print(f"Error: {e}")
@@ -88,7 +130,7 @@ def get_playerstats_or_playerstat():
     
     cursor = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = g.db.cursor(dictionary=True)
         
         if playerstat_id:
             cursor.execute("SELECT * FROM `PlayerStat` WHERE PlayerStatID = %s", (playerstat_id,))
@@ -121,7 +163,7 @@ def get_match_playerstats():
 
     cursor = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = g.db.cursor(dictionary=True)
         query = """
         SELECT 
             ps.PlayerStatID,
@@ -167,7 +209,7 @@ def get_player_matches():
     
     cursor = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = g.db.cursor(dictionary=True)
         
         if map_name:
             query = """
@@ -231,7 +273,7 @@ def get_player_playerstats():
 
     cursor = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = g.db.cursor(dictionary=True)
         query = """
         SELECT 
             ps.PlayerStatID,
@@ -274,7 +316,7 @@ def get_teamplayers():
 
     cursor = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = g.db.cursor(dictionary=True)
         cursor.execute("SELECT * FROM `TeamPlayer` WHERE TeamID = %s", (team_id,))
         team_players = cursor.fetchall()
         
@@ -295,17 +337,4 @@ if __name__ == "__main__":
     cfg = Config()
     api_key = cfg.cfg["API_KEY"]
 
-    try:
-        connection = mysql.connector.connect(
-            host=cfg.cfg["MySQLServer"],
-            database=cfg.cfg["MySQLDatabase"],
-            user=cfg.cfg["MySQLUsername"],
-            password=cfg.cfg["MySQLPassword"]
-        )
-
-    except Exception as e:
-        print("Failed to connect to the MySQL database.")
-        print(e)
-        exit()
-
-    app.run(debug=True)
+    app.run()

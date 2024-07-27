@@ -3,5 +3,6 @@
     "MySQLDatabase": "",
     "MySQLUsername": "",
     "MySQLPassword": "",
-    "API_KEY": ""
+    "API_KEY": "",
+    "STEAM_API_KEY": ""
 }

@@ -2,5 +2,6 @@
     "MySQLServer": "",
     "MySQLDatabase": "",
     "MySQLUsername": "",
-    "MySQLPassword": ""
+    "MySQLPassword": "",
+    "API_KEY": ""
 }

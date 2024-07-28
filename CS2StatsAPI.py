@@ -319,6 +319,5 @@ def get_teamplayers():
 
 if __name__ == "__main__":
     cfg = Config()
-    api_key = cfg.cfg["API_KEY"]
 
     app.run()

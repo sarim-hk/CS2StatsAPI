@@ -32,17 +32,7 @@ def teardown_request(exception):
     if db is not None:
         db.close()
 
-def require_api_key(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        provided_key = request.args.get("API_KEY")
-        if provided_key != api_key:
-            return jsonify({"error": "Invalid API key."}), 403
-        return f(*args, **kwargs)
-    return decorated_function
-
 @app.route("/api/get_matches_or_match")
-@require_api_key
 def get_matches_or_match():
     match_id = request.args.get("match_id")
     map_name = request.args.get("map")
@@ -88,7 +78,6 @@ def get_matches_or_match():
             cursor.close()
 
 @app.route("/api/get_players_or_player")
-@require_api_key
 def get_players_or_player():
     cursor = None
     player_id = request.args.get("player_id")
@@ -124,7 +113,6 @@ def get_players_or_player():
             cursor.close()
 
 @app.route("/api/get_playerstats_or_playerstat")
-@require_api_key
 def get_playerstats_or_playerstat():
     playerstat_id = request.args.get("playerstat_id")
     
@@ -155,7 +143,6 @@ def get_playerstats_or_playerstat():
             cursor.close()
 
 @app.route("/api/get_match_playerstats")
-@require_api_key
 def get_match_playerstats():
     match_id = request.args.get("match_id")
     if not match_id:
@@ -199,7 +186,6 @@ def get_match_playerstats():
             cursor.close()
 
 @app.route("/api/get_player_matches")
-@require_api_key
 def get_player_matches():
     player_id = request.args.get("player_id")
     map_name = request.args.get("map")
@@ -265,7 +251,6 @@ def get_player_matches():
             cursor.close()
 
 @app.route("/api/get_player_playerstats")
-@require_api_key
 def get_player_playerstats():
     player_id = request.args.get("player_id")
     if not player_id:
@@ -308,7 +293,6 @@ def get_player_playerstats():
             cursor.close()
 
 @app.route("/api/get_teamplayers")
-@require_api_key
 def get_teamplayers():
     team_id = request.args.get("team_id")
     if not team_id:

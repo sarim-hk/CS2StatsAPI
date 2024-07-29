@@ -1,38 +1,10 @@
-from Config import Config
-from Utilities import get_steam_summaries
-
-from functools import wraps
-from flask import Flask, jsonify, request, g
-from flask_cors import CORS
-
+from flask import Blueprint, jsonify, request, g
+from .utilities import get_steam_summaries
 from mysql.connector import Error
-import mysql.connector
 
-app = Flask(__name__)
-CORS(app)
+bp = Blueprint("routes", __name__)
 
-def get_db_connection():
-    if 'db' not in g:
-        cfg = Config()
-        g.db = mysql.connector.connect(
-            host=cfg.cfg["MySQLServer"],
-            database=cfg.cfg["MySQLDatabase"],
-            user=cfg.cfg["MySQLUsername"],
-            password=cfg.cfg["MySQLPassword"]
-        )
-    return g.db
-
-@app.before_request
-def before_request():
-    g.db = get_db_connection()
-
-@app.teardown_request
-def teardown_request(exception):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
-
-@app.route("/api/get_matches_or_match")
+@bp.route("/api/get_matches_or_match")
 def get_matches_or_match():
     match_id = request.args.get("match_id")
     map_name = request.args.get("map")
@@ -49,7 +21,7 @@ def get_matches_or_match():
             TeamTScore,
             TeamCTScore,
             DATE_FORMAT(MatchDate, '%d/%m/%Y %H:%i:%s') AS MatchDate
-        """
+            """
         
         if match_id:
             cursor.execute(f"SELECT {columns} FROM `Match` WHERE MatchID = %s", (match_id,))
@@ -77,7 +49,7 @@ def get_matches_or_match():
         if cursor:
             cursor.close()
 
-@app.route("/api/get_players_or_player")
+@bp.route("/api/get_players_or_player")
 def get_players_or_player():
     cursor = None
     player_id = request.args.get("player_id")
@@ -95,7 +67,7 @@ def get_players_or_player():
             return jsonify({"error": "Player(s) not found."}), 404
 
         steam_ids = [str(player["PlayerID"]) for player in players]
-        steam_summaries = get_steam_summaries(steam_ids, cfg.cfg["STEAM_API_KEY"])
+        steam_summaries = get_steam_summaries(steam_ids, g.app.config["STEAM_API_KEY"])
         
         for player in players:
             steam_summary = steam_summaries.get(str(player["PlayerID"]), {})
@@ -112,7 +84,7 @@ def get_players_or_player():
         if cursor:
             cursor.close()
 
-@app.route("/api/get_playerstats_or_playerstat")
+@bp.route("/api/get_playerstats_or_playerstat")
 def get_playerstats_or_playerstat():
     playerstat_id = request.args.get("playerstat_id")
     
@@ -142,7 +114,7 @@ def get_playerstats_or_playerstat():
         if cursor:
             cursor.close()
 
-@app.route("/api/get_match_playerstats")
+@bp.route("/api/get_match_playerstats")
 def get_match_playerstats():
     match_id = request.args.get("match_id")
     if not match_id:
@@ -185,7 +157,7 @@ def get_match_playerstats():
         if cursor:
             cursor.close()
 
-@app.route("/api/get_player_matches")
+@bp.route("/api/get_player_matches")
 def get_player_matches():
     player_id = request.args.get("player_id")
     map_name = request.args.get("map")
@@ -250,7 +222,7 @@ def get_player_matches():
         if cursor:
             cursor.close()
 
-@app.route("/api/get_player_playerstats")
+@bp.route("/api/get_player_playerstats")
 def get_player_playerstats():
     player_id = request.args.get("player_id")
     if not player_id:
@@ -292,7 +264,7 @@ def get_player_playerstats():
         if cursor:
             cursor.close()
 
-@app.route("/api/get_teamplayers")
+@bp.route("/api/get_teamplayers")
 def get_teamplayers():
     team_id = request.args.get("team_id")
     if not team_id:
@@ -316,8 +288,3 @@ def get_teamplayers():
     finally:
         if cursor:
             cursor.close()
-
-if __name__ == "__main__":
-    cfg = Config()
-
-    app.run()

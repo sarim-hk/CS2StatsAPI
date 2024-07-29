@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, jsonify, request, current_app, g
 from .utilities import get_steam_summaries
 from mysql.connector import Error
 
@@ -67,7 +67,7 @@ def get_players_or_player():
             return jsonify({"error": "Player(s) not found."}), 404
 
         steam_ids = [str(player["PlayerID"]) for player in players]
-        steam_summaries = get_steam_summaries(steam_ids, g.app.config["STEAM_API_KEY"])
+        steam_summaries = get_steam_summaries(steam_ids, current_app.config["STEAM_API_KEY"])
         
         for player in players:
             steam_summary = steam_summaries.get(str(player["PlayerID"]), {})

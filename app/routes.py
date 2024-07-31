@@ -4,7 +4,7 @@ from mysql.connector import Error
 
 bp = Blueprint("routes", __name__)
 
-@bp.route("/api/get_matches_or_match")
+@bp.route("/get_matches_or_match")
 def get_matches_or_match():
     match_id = request.args.get("match_id")
     map_name = request.args.get("map")
@@ -49,7 +49,7 @@ def get_matches_or_match():
         if cursor:
             cursor.close()
 
-@bp.route("/api/get_players_or_player")
+@bp.route("/get_players_or_player")
 def get_players_or_player():
     cursor = None
     player_id = request.args.get("player_id")
@@ -84,7 +84,7 @@ def get_players_or_player():
         if cursor:
             cursor.close()
 
-@bp.route("/api/get_playerstats_or_playerstat")
+@bp.route("/get_playerstats_or_playerstat")
 def get_playerstats_or_playerstat():
     playerstat_id = request.args.get("playerstat_id")
     
@@ -114,7 +114,7 @@ def get_playerstats_or_playerstat():
         if cursor:
             cursor.close()
 
-@bp.route("/api/get_match_playerstats")
+@bp.route("/get_match_playerstats")
 def get_match_playerstats():
     match_id = request.args.get("match_id")
     if not match_id:
@@ -157,7 +157,7 @@ def get_match_playerstats():
         if cursor:
             cursor.close()
 
-@bp.route("/api/get_player_matches")
+@bp.route("/get_player_matches")
 def get_player_matches():
     player_id = request.args.get("player_id")
     map_name = request.args.get("map")
@@ -222,7 +222,7 @@ def get_player_matches():
         if cursor:
             cursor.close()
 
-@bp.route("/api/get_player_playerstats")
+@bp.route("/get_player_playerstats")
 def get_player_playerstats():
     player_id = request.args.get("player_id")
     if not player_id:
@@ -264,7 +264,7 @@ def get_player_playerstats():
         if cursor:
             cursor.close()
 
-@bp.route("/api/get_teamplayers")
+@bp.route("/get_teamplayers")
 def get_teamplayers():
     team_id = request.args.get("team_id")
     if not team_id:

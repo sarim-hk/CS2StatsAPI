@@ -13,8 +13,8 @@ def create_app():
 
     CORS(app)
 
-    from app.routes import bp as routes_bp
-    app.register_blueprint(routes_bp)
+    from app.routes import bp as main_bp
+    app.register_blueprint(main_bp)
 
     def get_db_connection():
         if "db" not in g:

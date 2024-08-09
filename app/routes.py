@@ -13,18 +13,8 @@ def get_matches_or_match():
     try:
         cursor = g.db.cursor(dictionary=True)
         
-        columns = """
-            MatchID,
-            Map,
-            TeamTID,
-            TeamCTID,
-            TeamTScore,
-            TeamCTScore,
-            DATE_FORMAT(MatchDate, '%d/%m/%Y %H:%i:%s') AS MatchDate
-            """
-        
         if match_id:
-            cursor.execute(f"SELECT {columns} FROM `Match` WHERE MatchID = %s", (match_id,))
+            cursor.execute(f"SELECT * FROM `Match` WHERE MatchID = %s ORDER BY `MatchDate` DESC", (match_id,))
             match = cursor.fetchone()
             if match:
                 return jsonify(match)
@@ -32,12 +22,12 @@ def get_matches_or_match():
                 return jsonify({"error": "Match not found."}), 404
         
         elif map_name:
-            cursor.execute(f"SELECT {columns} FROM `Match` WHERE Map = %s", (map_name,))
+            cursor.execute(f"SELECT * FROM `Match` WHERE Map = %s ORDER BY `MatchDate` DESC", (map_name,))
             matches = cursor.fetchall()
             return jsonify(matches)
         
         else:
-            cursor.execute(f"SELECT {columns} FROM `Match`")
+            cursor.execute(f"SELECT * FROM `Match` ORDER BY `MatchDate` DESC")
             matches = cursor.fetchall()
             return jsonify(matches)
     
@@ -65,7 +55,7 @@ def get_players_or_player():
         
         if not players:
             return jsonify({"error": "Player(s) not found."}), 404
-
+        
         steam_ids = [str(player["PlayerID"]) for player in players]
         steam_summaries = get_steam_summaries(steam_ids, current_app.config["STEAM_API_KEY"])
         
@@ -74,8 +64,11 @@ def get_players_or_player():
             player["Avatar"] = steam_summary["avatarmedium"]
             player["Username"] = steam_summary["personaname"]
 
-        return jsonify(players)
-    
+        if player_id:
+            return jsonify(players[0])
+        else:
+            return jsonify(players)
+
     except Error as e:
         print(f"Error: {e}")
         return jsonify({"error": "Failed to fetch data."}), 500

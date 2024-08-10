@@ -3,7 +3,6 @@
     "MySQLDatabase": "",
     "MySQLUsername": "",
     "MySQLPassword": "",
-    "STEAM_API_KEY": "",
     "_readme": "Rename this file to `config.json` and input details above ^^"
 }
 

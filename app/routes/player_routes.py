@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, request, g, current_app
 from mysql.connector import Error
-from ..utilities import get_steam_summaries
 
 player_bp = Blueprint("player_routes", __name__)
 
@@ -15,13 +14,8 @@ def get_player_by_player_id():
 
         if not player:
             return jsonify({"error": "Player not found."}), 404
-        
-        steam_summaries = get_steam_summaries([player["PlayerID"]], current_app.config["STEAM_API_KEY"])
-        steam_summary = steam_summaries.get(player["PlayerID"], {})
-        player["Avatar"] = steam_summary.get("avatarmedium")
-        player["Username"] = steam_summary.get("personaname")
-
-        return jsonify(player)
+        else:
+            return jsonify(player)
 
     except Error as e:
         print(f"Error: {e}")
@@ -42,16 +36,8 @@ def get_players_or_player():
         
         if not players:
             return jsonify({"error": "Player(s) not found."}), 404
-        
-        steam_ids = [str(player["PlayerID"]) for player in players]
-        steam_summaries = get_steam_summaries(steam_ids, current_app.config["STEAM_API_KEY"])
-        
-        for player in players:
-            steam_summary = steam_summaries.get(str(player["PlayerID"]), {})
-            player["Avatar"] = steam_summary.get("avatarmedium")
-            player["Username"] = steam_summary.get("personaname")
-
-        return jsonify(players)
+        else:
+            return jsonify(players)
 
     except Error as e:
         print(f"Error: {e}")

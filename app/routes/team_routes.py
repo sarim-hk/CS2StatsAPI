@@ -3,6 +3,7 @@ from mysql.connector import Error
 
 team_bp = Blueprint("team_routes", __name__)
 
+# unused so far
 @team_bp.route("/get_teamplayers")
 def get_teamplayers():
     team_id = request.args.get("team_id")

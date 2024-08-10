@@ -112,12 +112,12 @@ def get_match_by_match_id():
     try:
         cursor = g.db.cursor(dictionary=True)
 
-        # Query to get match details along with team and player stats, ensuring correct team assignment
+        # Query to get match details along with team and player stats, including usernames
         cursor.execute("""
             SELECT 
                 m.MatchID, m.Map, m.TeamTID, m.TeamCTID, m.TeamTScore, m.TeamCTScore, m.MatchDate,
                 tt.TeamID AS TeamTID, tc.TeamID AS TeamCTID,
-                tp.TeamID AS PlayerTeamID, ps.PlayerID, ps.Kills, ps.Headshots, ps.Assists, 
+                tp.TeamID AS PlayerTeamID, ps.PlayerID, p.Username, ps.Kills, ps.Headshots, ps.Assists, 
                 ps.Deaths, ps.TotalDamage, ps.UtilityDamage, ps.RoundsPlayed
             FROM `Match` m
             JOIN `Team` tt ON m.TeamTID = tt.TeamID
@@ -126,6 +126,7 @@ def get_match_by_match_id():
             JOIN `PlayerStat` ps ON pm.PlayerID = ps.PlayerID
             JOIN `Match_PlayerStat` mps ON m.MatchID = mps.MatchID AND ps.PlayerStatID = mps.PlayerStatID
             JOIN `TeamPlayer` tp ON pm.PlayerID = tp.PlayerID
+            JOIN `Player` p ON ps.PlayerID = p.PlayerID
             WHERE m.MatchID = %s
             ORDER BY m.MatchDate DESC
         """, (match_id,))
@@ -156,6 +157,7 @@ def get_match_by_match_id():
         for row in matches:
             player_stats = {
                 "PlayerID": row['PlayerID'],
+                "Username": row['Username'],  # Include the Username
                 "Kills": row['Kills'],
                 "Headshots": row['Headshots'],
                 "Assists": row['Assists'],

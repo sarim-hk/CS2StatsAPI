@@ -67,6 +67,8 @@ def get_matches_by_player_id():
                 `Match` m ON pm.MatchID = m.MatchID
             WHERE 
                 pm.PlayerID = %s AND m.Map = %s
+            ORDER BY
+                `MatchDate` DESC
             """
             cursor.execute(query, (player_id, map_name))
         
@@ -86,6 +88,8 @@ def get_matches_by_player_id():
                 `Match` m ON pm.MatchID = m.MatchID
             WHERE 
                 pm.PlayerID = %s
+            ORDER BY
+                `MatchDate` DESC
             """
             cursor.execute(query, (player_id,))
         

@@ -9,7 +9,13 @@ def get_player_by_player_id():
     player_id = request.args.get("player_id")
     try:
         cursor = g.db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM `Player` WHERE PlayerID = %s", (player_id,))
+        cursor.execute("""
+            SELECT *
+            FROM CS2S_Player
+            INNER JOIN CS2S_PlayerInfo ON CS2S_Player.PlayerID = CS2S_PlayerInfo.PlayerID
+            WHERE CS2S_Player.PlayerID = %s
+            """, (player_id,))
+        
         player = cursor.fetchone()
 
         if not player:
@@ -25,13 +31,19 @@ def get_player_by_player_id():
         if cursor:
             cursor.close()
 
-@player_bp.route("/get_players")
+@player_bp.route("/players_panel")
 def get_players_or_player():
     cursor = None
     try:
         cursor = g.db.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM `Player` ORDER BY `ELO` DESC")
+        cursor.execute("""
+                       SELECT *
+                       FROM CS2S_Player
+                       INNER JOIN CS2S_PlayerInfo ON CS2S_Player.PlayerID = CS2S_PlayerInfo.PlayerID
+                       ORDER BY ELO DESC
+                       """)
+
         players = cursor.fetchall()
         
         if not players:

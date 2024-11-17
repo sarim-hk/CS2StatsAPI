@@ -11,8 +11,7 @@ def players_panel():
 
         cursor.execute("""
                        SELECT *
-                       FROM CS2S_Player
-                       INNER JOIN CS2S_PlayerInfo ON CS2S_Player.PlayerID = CS2S_PlayerInfo.PlayerID
+                       FROM CS2S_PlayerInfo
                        ORDER BY ELO DESC
                        """)
 

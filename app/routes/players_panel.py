@@ -10,11 +10,14 @@ def players_panel():
         cursor = g.db.cursor(dictionary=True)
 
         cursor.execute("""
-                       SELECT *
-                       FROM CS2S_PlayerInfo
-                       ORDER BY ELO DESC
-                       """)
-
+            SELECT p.*
+            FROM CS2S_PlayerInfo p
+            JOIN CS2S_Player_Matches pm ON p.PlayerID = pm.PlayerID
+            GROUP BY p.PlayerID
+            HAVING COUNT(pm.MatchID) > 0
+            ORDER BY p.ELO DESC
+        """)
+        
         players = cursor.fetchall()
         
         if not players:

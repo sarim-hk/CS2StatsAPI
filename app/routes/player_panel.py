@@ -11,9 +11,8 @@ def player_panel_by_player_id():
         cursor = g.db.cursor(dictionary=True)
         cursor.execute("""
             SELECT *
-            FROM CS2S_Player
-            INNER JOIN CS2S_PlayerInfo ON CS2S_Player.PlayerID = CS2S_PlayerInfo.PlayerID
-            WHERE CS2S_Player.PlayerID = %s
+            FROM CS2S_PlayerInfo
+            WHERE PlayerID = %s
             """, (player_id,))
         
         player = cursor.fetchone()

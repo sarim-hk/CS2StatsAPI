@@ -37,6 +37,34 @@ def playerstats_panel_by_player_id():
         elif ct_stats:
             playerstats["Overall"] = ct_stats
 
+        cursor.execute("""
+                       SELECT COUNT(MatchID) AS MatchesPlayed
+                       FROM CS2S_Player_Matches
+                       WHERE PlayerID = %s
+                       """, (player_id,))
+
+        temp = cursor.fetchone()
+        playerstats.update(temp)
+
+        cursor.execute("""
+                       SELECT COUNT(MatchID) AS MatchesPlayed
+                       FROM CS2S_Player_Matches
+                       WHERE PlayerID = %s
+                       """, (player_id,))
+
+        temp = cursor.fetchone()
+        playerstats.update(temp)
+
+        cursor.execute("""
+                       SELECT COUNT(DISTINCT tr.MatchID) AS MatchesWon
+                       FROM CS2S_Team_Players tp
+                       JOIN CS2S_TeamResult tr ON tp.TeamID = tr.TeamID
+                       WHERE tr.Result = 'Win' AND tp.PlayerID = %s
+                       """, (player_id,))
+
+        temp = cursor.fetchone()
+        playerstats.update(temp)
+
         return jsonify(playerstats)
 
     except Exception as e:

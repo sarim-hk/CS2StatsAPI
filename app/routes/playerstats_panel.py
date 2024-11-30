@@ -1,131 +1,190 @@
+from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, g, request
-from mysql.connector import Error
+from decimal import Decimal
+import traceback
 
-playerstats_panel_bp = Blueprint('playerstats_panel_bp', __name__)
+utility_weapons = ["smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"]
+
+date_ranges = {
+    "7days": timedelta(days=7),
+    "14days": timedelta(days=14),
+    "1month": timedelta(days=30),
+    "3months": timedelta(days=90),
+    "6months": timedelta(days=180),
+    "1year": timedelta(days=365),
+    "overall": timedelta(weeks=9999)
+}
+
+match_ranges = {
+    "5matches": 5,
+    "10matches": 10,
+    "15matches": 15,
+    "20matches": 20,
+    "25matches": 25,
+    "50matches": 50,
+    "100matches": 100,
+}
+
+playerstats_panel_bp = Blueprint("playerstats_panel_bp", __name__)
 
 @playerstats_panel_bp.route("/playerstats_panel_by_player_id")
 def playerstats_panel_by_player_id():
     player_id = request.args.get("player_id")
+    range = request.args.get("range")
 
+    if not player_id or not range:
+        return jsonify({"error": "player_id and range are required"}), 400
+    
+    elif range not in date_ranges and range not in match_ranges:
+        return jsonify({"error": f"range is not valid: {date_ranges.keys()} , {match_ranges.keys()}"}), 400
+    
     try:
         cursor = g.db.cursor(dictionary=True)
-        cursor.execute("""
-                       SELECT *
-                       FROM CS2S_PlayerStats
-                       WHERE PlayerID = %s
-                       """, (player_id,))
 
-        temp = cursor.fetchall()
+        if range in date_ranges:
+            get_match_results_date_range(cursor, range, player_id)
 
-        playerstats = {}
-        terrorist_stats = None
-        ct_stats = None
+        elif range in match_ranges:
+            get_match_results_match_range(cursor, range, player_id)
 
-        for playerstat in temp:
-            if playerstat["Side"] == 2:
-                terrorist_stats = _create_playerstat(playerstat)
-                playerstats["Terrorist"] = terrorist_stats
+        results = cursor.fetchall()
 
-            elif playerstat["Side"] == 3:
-                ct_stats = _create_playerstat(playerstat)
-                playerstats["CounterTerrorist"] = ct_stats
+        match_ids = [result["MatchID"] for result in results]
+        parameterised_match_ids = ", ".join(["%s"] * len(match_ids))
+        matches_won = sum(1 for result in results if result["Result"] == "Win")
+        matches_played = len(match_ids)
+        rounds_played = sum(result["RoundsPlayed"] for result in results)
+        
+        # Get Damage and UtilityDamage
+        cursor.execute(f"""
+            SELECT 
+                SUM(CASE WHEN Weapon IN ({", ".join(["%s"] * len(utility_weapons))}) THEN Damage ELSE 0 END) AS UtilityDamage,
+                SUM(CASE WHEN Weapon NOT IN ({", ".join(["%s"] * len(utility_weapons))}) THEN Damage ELSE 0 END) +
+                SUM(CASE WHEN Weapon IN ({", ".join(["%s"] * len(utility_weapons))}) THEN Damage ELSE 0 END) AS Damage
+            FROM CS2S_Hurt
+            WHERE AttackerID = %s AND MatchID IN ({parameterised_match_ids})
+        """, (*utility_weapons, *utility_weapons, *utility_weapons, player_id, *match_ids))
 
-        if terrorist_stats and ct_stats:
-            playerstats["Overall"] = _combine_playerstats(terrorist_stats, ct_stats)
-        elif terrorist_stats:
-            playerstats["Overall"] = terrorist_stats
-        elif ct_stats:
-            playerstats["Overall"] = ct_stats
+        damage = cursor.fetchone()
 
-        cursor.execute("""
-                       SELECT COUNT(MatchID) AS MatchesPlayed
-                       FROM CS2S_Player_Matches
-                       WHERE PlayerID = %s
-                       """, (player_id,))
+        # Get Kills, Assists, Deaths
+        cursor.execute(f"""
+        SELECT 
+            SUM(CASE WHEN AttackerID = %s THEN 1 ELSE 0 END) AS Kills,
+            SUM(CASE WHEN AssisterID = %s THEN 1 ELSE 0 END) AS Assists,
+            SUM(CASE WHEN VictimID = %s THEN 1 ELSE 0 END) AS Deaths,
+            SUM(CASE WHEN AttackerID = %s AND Hitgroup = 1 THEN 1 ELSE 0 END) AS Headshots
+        FROM CS2S_Death
+        WHERE MatchID IN ({parameterised_match_ids})
+        """, (player_id, player_id, player_id, player_id, *match_ids))
+        
+        stats = cursor.fetchone()
 
-        temp = cursor.fetchone()
-        playerstats.update(temp)
+        # Get EnemiesFlashed and Duration
+        cursor.execute(f"""
+        SELECT 
+            COUNT(*) AS EnemiesFlashed,
+            SUM(Duration) AS TotalDuration
+        FROM CS2S_Blind
+        WHERE ThrowerID = %s AND MatchID IN ({parameterised_match_ids})
+        """, (player_id, *match_ids))
 
-        cursor.execute("""
-                       SELECT COUNT(MatchID) AS MatchesPlayed
-                       FROM CS2S_Player_Matches
-                       WHERE PlayerID = %s
-                       """, (player_id,))
+        blinds = cursor.fetchone()
 
-        temp = cursor.fetchone()
-        playerstats.update(temp)
+        # Get KAST
+        cursor.execute(f"""
+        SELECT 
+            COUNT(*) AS KAST
+        FROM CS2S_KAST
+        WHERE PlayerID = %s AND MatchID IN ({parameterised_match_ids})
+        """, (player_id, *match_ids))
 
-        cursor.execute("""
-                       SELECT COUNT(DISTINCT tr.MatchID) AS MatchesWon
-                       FROM CS2S_Team_Players tp
-                       JOIN CS2S_TeamResult tr ON tp.TeamID = tr.TeamID
-                       WHERE tr.Result = 'Win' AND tp.PlayerID = %s
-                       """, (player_id,))
+        kast = cursor.fetchone()
 
-        temp = cursor.fetchone()
-        playerstats.update(temp)
+        stats = {
+            "PlayerID": player_id,
+            "Damage": damage["Damage"] or 0,
+            "UtilityDamage": damage["UtilityDamage"] or 0,
+            "Kills": stats["Kills"] or 0,
+            "Assists": stats["Assists"] or 0,
+            "Deaths": stats["Deaths"] or 0,
+            "Headshots": stats["Headshots"] or 0,
+            "Blinds": {
+                "Count": blinds["EnemiesFlashed"] or 0,
+                "TotalDuration": blinds["TotalDuration"] or 0.0
+            },
+            "MatchesPlayed": matches_played or 0,
+            "MatchesWon": matches_won or 0,
+            "RoundsPlayed": rounds_played or 0,
+        }
 
-        return jsonify(playerstats)
+        stats["KAST"] = round(((kast["KAST"] / stats["RoundsPlayed"]) * 100), 2) or 0
+        stats["ADR"] = round(stats["Damage"] / stats["RoundsPlayed"], 2) or 0
+        stats["KPR"] = round(stats["Kills"] / stats["RoundsPlayed"], 2) or 0
+        stats["APR"] = round(stats["Assists"] / stats["RoundsPlayed"], 2) or 0
+        stats["DPR"] = round(stats["Deaths"] / stats["RoundsPlayed"], 2) or 0
+
+        stats["Impact"] = round(2.13 * float(stats["KPR"]) + 0.42 * (float(stats["Assists"]) / float(stats["RoundsPlayed"])) - 0.41, 2) or 0
+        stats["Rating"] = round((0.0073 * float(stats["KAST"]) + 0.3591 * float(stats["KPR"]) + -0.5329 * float(stats["DPR"]) + 0.2372 * float(stats["Impact"]) + 0.0032 * float(stats["ADR"]) + 0.1587), 2) or 0
+        
+        return jsonify(stats)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
 
-def _create_playerstat(temp):
-    rounds_played = temp["RoundsPlayed"]
-    playerstat = {
-        "Kills": temp["Kills"],
-        "Headshots": temp["Headshots"],
-        "Assists": temp["Assists"],
-        "Deaths": temp["Deaths"],
-        "Damage": temp["Damage"],
-        "UtilityDamage": temp["UtilityDamage"],
-        "EnemiesFlashed": temp["EnemiesFlashed"],
-        "GrenadesThrown": temp["GrenadesThrown"],
-        "ClutchAttempts": temp["ClutchAttempts"],
-        "ClutchWins": temp["ClutchWins"],
-        "DuelAttempts": temp["DuelAttempts"],
-        "DuelWins": temp["DuelWins"],
-        "Rounds": rounds_played,
-        "KAST": round(temp["RoundsKAST"] / rounds_played * 100, 2) if rounds_played > 0 else 0,
-        "ADR": round(temp["Damage"] / rounds_played, 2) if rounds_played > 0 else 0,
-        "KPR": round(temp["Kills"] / rounds_played, 2) if rounds_played > 0 else 0,
-        "APR": round(temp["Assists"] / rounds_played, 2) if rounds_played > 0 else 0,
-        "DPR": round(temp["Deaths"] / rounds_played, 2) if rounds_played > 0 else 0
-    }
+        return jsonify({
+            "error": error_message,
+            "traceback": error_traceback
+        }), 500
 
-    playerstat["Impact"] = round(2.13 * playerstat["KPR"] + 0.42 * playerstat["APR"] - 0.41, 2) if rounds_played > 0 else 0
-    playerstat["Rating"] = round((0.0073 * playerstat["KAST"] + 0.3591 * playerstat["KPR"] - 0.5329 * playerstat["DPR"] +
-                                  0.2372 * playerstat["Impact"] + 0.0032 * playerstat["ADR"] + 0.1587), 2) if rounds_played > 0 else 0
+def get_match_results_match_range(cursor, range, player_id):
+    match_range = match_ranges[range]
 
-    return playerstat
+    cursor.execute("""
+        SELECT 
+            pm.MatchID,
+            tr.Result,
+            COUNT(r.MatchID) AS RoundsPlayed
+        FROM CS2S_Player_Matches pm
+        JOIN CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
+        JOIN CS2S_Team_Players tp ON tr.TeamID = tp.TeamID
+        LEFT JOIN CS2S_Round r ON r.MatchID = pm.MatchID
+        WHERE pm.PlayerID = %s AND tp.PlayerID = %s
+        GROUP BY pm.MatchID, tr.Result
+        ORDER BY pm.MatchID DESC
+        LIMIT %s
+    """, (player_id, player_id, match_range))
 
-def _combine_playerstats(stat1, stat2):
-    combined_rounds = stat1["Rounds"] + stat2["Rounds"]
+def get_match_results_date_range(cursor, range, player_id):
+    end_date = datetime.now()
+    start_date = end_date - date_ranges[range]
+    start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
+    end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
 
-    combined_stat = {
-        "Kills": stat1["Kills"] + stat2["Kills"],
-        "Headshots": stat1["Headshots"] + stat2["Headshots"],
-        "Assists": stat1["Assists"] + stat2["Assists"],
-        "Deaths": stat1["Deaths"] + stat2["Deaths"],
-        "Damage": stat1["Damage"] + stat2["Damage"],
-        "UtilityDamage": stat1["UtilityDamage"] + stat2["UtilityDamage"],
-        "EnemiesFlashed": stat1["EnemiesFlashed"] + stat2["EnemiesFlashed"],
-        "GrenadesThrown": stat1["GrenadesThrown"] + stat2["GrenadesThrown"],
-        "ClutchAttempts": stat1["ClutchAttempts"] + stat2["ClutchAttempts"],
-        "ClutchWins": stat1["ClutchWins"] + stat2["ClutchWins"],
-        "DuelAttempts": stat1["DuelAttempts"] + stat2["DuelAttempts"],
-        "DuelWins": stat1["DuelWins"] + stat2["DuelWins"],
-        "Rounds": combined_rounds,
-        "KAST": round((stat1["KAST"] * stat1["Rounds"] + stat2["KAST"] * stat2["Rounds"]) / combined_rounds, 2) if combined_rounds > 0 else 0,
-        "ADR": round((stat1["Damage"] + stat2["Damage"]) / combined_rounds, 2) if combined_rounds > 0 else 0,
-        "KPR": round((stat1["Kills"] + stat2["Kills"]) / combined_rounds, 2) if combined_rounds > 0 else 0,
-        "APR": round((stat1["Assists"] + stat2["Assists"]) / combined_rounds, 2) if combined_rounds > 0 else 0,
-        "DPR": round((stat1["Deaths"] + stat2["Deaths"]) / combined_rounds, 2) if combined_rounds > 0 else 0
-    }
+    # Query for the min and max match IDs based on the date range
+    query = """
+    SELECT MIN(MatchID) AS MinMatchID, MAX(MatchID) AS MaxMatchID
+    FROM CS2S_Match
+    WHERE (%s IS NULL OR MatchDate >= %s) AND (%s IS NULL OR MatchDate <= %s)
+    """
+    
+    cursor.execute(query, (start_date_str, start_date_str, end_date_str, end_date_str))
+    date_range_result = cursor.fetchone()
 
-    combined_stat["Impact"] = round(2.13 * combined_stat["KPR"] + 0.42 * combined_stat["APR"] - 0.41, 2) if combined_rounds > 0 else 0
-    combined_stat["Rating"] = round((0.0073 * combined_stat["KAST"] + 0.3591 * combined_stat["KPR"] -
-                                     0.5329 * combined_stat["DPR"] + 0.2372 * combined_stat["Impact"] +
-                                     0.0032 * combined_stat["ADR"] + 0.1587), 2) if combined_rounds > 0 else 0
+    min_id = date_range_result["MinMatchID"] or 0
+    max_id = date_range_result["MaxMatchID"] or 999
 
-    return combined_stat
+    # Query for matches played by the player
+    cursor.execute("""
+    SELECT 
+        pm.MatchID,
+        tr.Result,
+        COUNT(r.MatchID) AS RoundsPlayed
+    FROM CS2S_Player_Matches pm
+    JOIN CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
+    JOIN CS2S_Team_Players tp ON tr.TeamID = tp.TeamID
+    LEFT JOIN CS2S_Round r ON r.MatchID = pm.MatchID
+    WHERE pm.PlayerID = %s AND pm.MatchID BETWEEN %s AND %s AND tp.PlayerID = %s
+    GROUP BY pm.MatchID, tr.Result
+    """, (player_id, min_id, max_id, player_id))

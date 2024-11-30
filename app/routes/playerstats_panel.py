@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, g, request
-from decimal import Decimal
 import traceback
 
 utility_weapons = ["smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"]
@@ -42,12 +41,10 @@ def playerstats_panel_by_player_id():
         cursor = g.db.cursor(dictionary=True)
 
         if range in date_ranges:
-            get_match_results_date_range(cursor, range, player_id)
+            results = get_match_results_date_range(cursor, range, player_id)
 
         elif range in match_ranges:
-            get_match_results_match_range(cursor, range, player_id)
-
-        results = cursor.fetchall()
+            results = get_match_results_match_range(cursor, range, player_id)
 
         match_ids = [result["MatchID"] for result in results]
         parameterised_match_ids = ", ".join(["%s"] * len(match_ids))
@@ -156,6 +153,9 @@ def get_match_results_match_range(cursor, range, player_id):
         LIMIT %s
     """, (player_id, player_id, match_range))
 
+    results = cursor.fetchall()
+    return results
+
 def get_match_results_date_range(cursor, range, player_id):
     end_date = datetime.now()
     start_date = end_date - date_ranges[range]
@@ -188,3 +188,6 @@ def get_match_results_date_range(cursor, range, player_id):
     WHERE pm.PlayerID = %s AND pm.MatchID BETWEEN %s AND %s AND tp.PlayerID = %s
     GROUP BY pm.MatchID, tr.Result
     """, (player_id, min_id, max_id, player_id))
+
+    results = cursor.fetchall()
+    return results

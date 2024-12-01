@@ -29,12 +29,13 @@ playerstats_panel_bp = Blueprint("playerstats_panel_bp", __name__)
 @playerstats_panel_bp.route("/playerstats_panel_by_player_id")
 def playerstats_panel_by_player_id():
     player_id = request.args.get("player_id")
+    map_id = request.args.get("map_id")
     range = request.args.get("range")
 
     if not player_id:
         return jsonify({"error": "player_id is required"}), 400
     
-    elif not range:
+    if not range:
         range = "overall"
 
     elif range not in date_ranges and range not in match_ranges:
@@ -44,14 +45,17 @@ def playerstats_panel_by_player_id():
         cursor = g.db.cursor(dictionary=True)
 
         if range in date_ranges:
-            results = get_match_results_date_range(cursor, range, player_id)
+            results = get_match_results_date_range(cursor, range, player_id, map_id)
 
         elif range in match_ranges:
-            results = get_match_results_match_range(cursor, range, player_id)
+            results = get_match_results_match_range(cursor, range, player_id, map_id)
 
         match_ids = [result["MatchID"] for result in results]
         matches_won = sum(1 for result in results if result["Result"] == "Win")
         matches_played = len(match_ids)
+
+        if len(match_ids) == 0:
+            return jsonify({"error": "Matches not found."}), 404
 
         t_round_ids, ct_round_ids = get_split_round_ids_from_match_ids(cursor, match_ids, player_id)
         
@@ -62,7 +66,7 @@ def playerstats_panel_by_player_id():
         stats = {
             "Overall": combined_stats or 0,
             "Terrorist": t_stats or 0,
-            "Counter-Terrorist": ct_stats or 0,
+            "CounterTerrorist": ct_stats or 0,
             "MatchesPlayed": matches_played or 0,
             "MatchesWon": matches_won or 0,
         }
@@ -80,56 +84,80 @@ def playerstats_panel_by_player_id():
             "traceback": error_traceback
         }), 500
 
-def get_match_results_match_range(cursor, range, player_id):
+def get_match_results_match_range(cursor, range, player_id, map_id=None): 
     match_range = match_ranges[range]
-
-    cursor.execute("""
+    
+    query = """
         SELECT 
             pm.MatchID,
             tr.Result
         FROM CS2S_Player_Matches pm
         JOIN CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
         JOIN CS2S_Team_Players tp ON tr.TeamID = tp.TeamID
+        JOIN CS2S_Match m ON pm.MatchID = m.MatchID
         WHERE pm.PlayerID = %s AND tp.PlayerID = %s
+        {map_condition}
         GROUP BY pm.MatchID, tr.Result
         ORDER BY pm.MatchID DESC
         LIMIT %s
-    """, (player_id, player_id, match_range))
-
+    """
+    
+    # Adjust query and parameters based on map_id
+    if map_id is not None:
+        query = query.format(map_condition="AND m.MapID = %s")
+        params = (player_id, player_id, map_id, match_range)
+    else:
+        query = query.format(map_condition="")
+        params = (player_id, player_id, match_range)
+    
+    cursor.execute(query, params)
     results = cursor.fetchall()
     return results
 
-def get_match_results_date_range(cursor, range, player_id):
+def get_match_results_date_range(cursor, range, player_id, map_id=None):
     end_date = datetime.now()
     start_date = end_date - date_ranges[range]
     start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
     end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
-
-    # Query for the min and max match IDs based on the date range
-    query = """
-    SELECT MIN(MatchID) AS MinMatchID, MAX(MatchID) AS MaxMatchID
-    FROM CS2S_Match
-    WHERE (%s IS NULL OR MatchDate >= %s) AND (%s IS NULL OR MatchDate <= %s)
-    """
     
-    cursor.execute(query, (start_date_str, start_date_str, end_date_str, end_date_str))
-    date_range_result = cursor.fetchone()
-
-    min_id = date_range_result["MinMatchID"] or 0
-    max_id = date_range_result["MaxMatchID"] or 999
-
-    # Query for matches played by the player
-    cursor.execute("""
+    query = """
+    WITH DateRangeMatches AS (
+        SELECT MatchID, MatchDate
+        FROM CS2S_Match
+        WHERE (%s IS NULL OR MatchDate >= %s) 
+          AND (%s IS NULL OR MatchDate <= %s)
+          {map_condition}
+    )
     SELECT 
         pm.MatchID,
         tr.Result
-    FROM CS2S_Player_Matches pm
+    FROM DateRangeMatches drm
+    JOIN CS2S_Player_Matches pm ON drm.MatchID = pm.MatchID
     JOIN CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
     JOIN CS2S_Team_Players tp ON tr.TeamID = tp.TeamID
-    WHERE pm.PlayerID = %s AND pm.MatchID BETWEEN %s AND %s AND tp.PlayerID = %s
+    WHERE pm.PlayerID = %s 
+      AND tp.PlayerID = %s
     GROUP BY pm.MatchID, tr.Result
-    """, (player_id, min_id, max_id, player_id))
-
+    """
+    
+    # Adjust query and parameters based on map_id
+    if map_id is not None:
+        query = query.format(map_condition="AND MapID = %s")
+        params = (
+            start_date_str, start_date_str, 
+            end_date_str, end_date_str,
+            map_id, 
+            player_id, player_id
+        )
+    else:
+        query = query.format(map_condition="")
+        params = (
+            start_date_str, start_date_str, 
+            end_date_str, end_date_str,
+            player_id, player_id
+        )
+    
+    cursor.execute(query, params)
     results = cursor.fetchall()
     return results
 
@@ -161,6 +189,20 @@ def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
     ct_rounds = [round["RoundID"] for round in rounds if round["PlayerSide"] == 3]
 
     return t_rounds, ct_rounds
+
+def filter_match_ids_by_map(cursor, match_ids, map_id):
+    parameterized_match_ids = ", ".join(["%s"] * len(match_ids))
+
+    cursor.execute(f"""
+        SELECT MatchID
+        FROM CS2S_Match
+        WHERE MatchID IN ({parameterized_match_ids}) AND MapID = %s
+    """, (*match_ids, map_id))
+
+    result = cursor.fetchall()
+
+    filtered_match_ids = [row['MatchID'] for row in result]
+    return filtered_match_ids
 
 def get_stats(cursor, round_ids, player_id):
     cursor.execute(f"""

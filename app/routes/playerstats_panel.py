@@ -70,6 +70,7 @@ def playerstats_panel_by_player_id():
                     "CounterTerrorist": 0,
                     "MatchesPlayed": 0,
                     "MatchesWon": 0,
+                    "MatchIDs": [],
                 }
                 continue
 
@@ -95,6 +96,7 @@ def playerstats_panel_by_player_id():
                 "CounterTerrorist": ct_stats or 0,
                 "MatchesPlayed": matches_played or 0,
                 "MatchesWon": matches_won or 0,
+                "MatchIDs": match_ids or [],
             }
 
         return jsonify(all_player_stats)
@@ -140,7 +142,6 @@ def get_match_results_match_range(cursor, range, player_ids, map_id=None):
     cursor.execute(query, params)
     results = cursor.fetchall()
     return results
-
 
 def get_match_results_date_range(cursor, range, player_ids, map_id=None):
     end_date = datetime.now()

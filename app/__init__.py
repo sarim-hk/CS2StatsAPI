@@ -5,6 +5,7 @@ from .jobs.set_player_of_the_week import set_player_of_the_week
 import mysql.connector
 import json
 import os
+import multiprocessing
 
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
@@ -33,7 +34,7 @@ def create_app():
 
     @app.before_request
     def before_request():
-        g.db = get_db_connection(g)
+        g.db = get_db_connection()
 
     @app.teardown_request
     def teardown_request(exception):
@@ -41,11 +42,22 @@ def create_app():
         if db is not None:
             db.close()
 
+    # Scheduler setup
     scheduler = BackgroundScheduler()
 
     def start_scheduler():
-        scheduler.add_job(func=set_player_of_the_week, trigger="cron", day_of_week="mon", hour=0, minute=0, args=[app, get_db_connection])
-        scheduler.start()
+        if app.debug:
+            print("Starting scheduler in debug mode...")
+            scheduler.add_job(func=set_player_of_the_week, trigger="cron", day_of_week="mon", hour=17, minute=10, args=[app, get_db_connection])
+            scheduler.start()
+            
+        else:
+            if multiprocessing.current_process().name == "MainProcess":
+                print("Starting scheduler in production mode (master process)...")
+                scheduler.add_job(func=set_player_of_the_week, trigger="cron", day_of_week="mon", hour=0, minute=0, args=[app, get_db_connection])
+                scheduler.start()
+            else:
+                print("Skipping scheduler startup in worker process...")
 
     # Start the scheduler
     start_scheduler()
@@ -53,6 +65,7 @@ def create_app():
     # Graceful shutdown of the scheduler
     @app.teardown_appcontext
     def shutdown_scheduler(exception=None):
-        scheduler.shutdown(wait=False)
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
 
     return app

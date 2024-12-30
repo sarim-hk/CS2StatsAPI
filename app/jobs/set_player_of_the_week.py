@@ -12,7 +12,7 @@ def set_player_of_the_week(app, get_db_connection):
             all_player_stats_7_days = get_all_players_stats_last_7_days(cursor)
             all_player_stats_overall = get_all_players_stats_overall(cursor)
 
-            cursor.execute("UPDATE CS2S_PlayerInfo SET PlayerOfTheWeek = 0")
+            cursor.execute("TRUNCATE TABLE CS2S_PlayerOfTheWeek")
 
             # Calculate rating increase
             player_rating_increases = {}
@@ -31,24 +31,22 @@ def set_player_of_the_week(app, get_db_connection):
 
             # Find top 3 rating increases
             if player_rating_increases:
-
-                top_3_players = sorted(
+                top_players = sorted(
                     player_rating_increases.items(), 
                     key=lambda x: x[1]["rating_increase"], 
                     reverse=True
                 )
 
-                pprint.pprint(top_3_players)
-
-                top_3_players = top_3_players[:3]
+                pprint.pprint(top_players)
 
                 # Update PlayerOfTheWeek in DB
-                for idx, (player_id, _) in enumerate(top_3_players, start=1):
-                    cursor.execute(
-                        "UPDATE CS2S_PlayerInfo SET PlayerOfTheWeek = %s WHERE PlayerID = %s", 
-                        (idx, player_id)
-                    )
-                    
+                for idx, (player_id, stats) in enumerate(top_players, start=1):
+                    cursor.execute("""
+                        INSERT INTO CS2S_PlayerOfTheWeek (PlayerID, WeekPosition, BaseRating, WeekRating, RatingDelta) 
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (player_id, idx, stats["overall_rating"], stats["seven_day_rating"], stats["rating_increase"]))
+                                    
                 db.commit()
 
             return player_rating_increases

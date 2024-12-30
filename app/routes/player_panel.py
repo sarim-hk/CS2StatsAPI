@@ -10,11 +10,15 @@ def player_panel_by_player_id():
     try:
         cursor = g.db.cursor(dictionary=True)
         cursor.execute("""
-            SELECT *
-            FROM CS2S_PlayerInfo
-            WHERE PlayerID = %s
-            """, (player_id,))
-        
+            SELECT 
+                p.*,
+                pow.WeekPosition
+            FROM CS2S_PlayerInfo p
+            LEFT JOIN CS2S_PlayerOfTheWeek pow 
+                ON p.PlayerID = pow.PlayerID
+            WHERE p.PlayerID = %s
+        """, (player_id,))
+
         player = cursor.fetchone()
 
         if not player:

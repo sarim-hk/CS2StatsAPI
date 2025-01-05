@@ -5,56 +5,72 @@ from ..routes.playerstats_panel import get_stats, get_match_results_date_range, 
 def set_player_of_the_week(app, get_db_connection):
     with app.app_context():
         db = get_db_connection()
-        cursor = db.cursor()
-
+        
         try:
-            cursor = g.db.cursor(dictionary=True)
-            all_player_stats_7_days = get_all_players_stats_last_7_days(cursor)
-            all_player_stats_overall = get_all_players_stats_overall(cursor)
+            # Use a single cursor
+            with db.cursor(dictionary=True) as cursor:                
+                all_player_stats_7_days = get_all_players_stats_last_7_days(cursor)
+                all_player_stats_overall = get_all_players_stats_overall(cursor)
 
-            cursor.execute("TRUNCATE TABLE CS2S_PlayerOfTheWeek")
+                cursor.execute("TRUNCATE TABLE CS2S_PlayerOfTheWeek")
 
-            # Calculate rating increase
-            player_rating_increases = {}
-            for player_id, seven_day_stats in all_player_stats_7_days.items():
+                # Calculate rating increase
+                player_rating_increases = {}
+                for player_id, seven_day_stats in all_player_stats_7_days.items():
+                    if player_id in all_player_stats_overall:
+                        seven_day_rating = seven_day_stats.get("Rating", 0)
+                        overall_rating = all_player_stats_overall[player_id].get("Rating", 0)
+                        
+                        rating_increase = seven_day_rating - overall_rating
+                        player_rating_increases[player_id] = {
+                            "seven_day_rating": seven_day_rating,
+                            "overall_rating": overall_rating,
+                            "rating_increase": rating_increase
+                        }
 
-                if player_id in all_player_stats_overall:
-                    seven_day_rating = seven_day_stats.get("Rating", 0)
-                    overall_rating = all_player_stats_overall[player_id].get("Rating", 0)
+                # Find top 3 rating increases
+                if player_rating_increases:
+                    top_players = sorted(
+                        player_rating_increases.items(), 
+                        key=lambda x: x[1]["rating_increase"], 
+                        reverse=True
+                    )
+
+                    # Print only once for debugging
+                    pprint.pprint(top_players)
+
+                    # Update PlayerOfTheWeek in DB
+                    insert_sql = """
+                        INSERT INTO CS2S_PlayerOfTheWeek 
+                            (PlayerID, WeekPosition, BaseRating, WeekRating, RatingDelta)
+                        VALUES 
+                            (%s, %s, %s, %s, %s)
+                    """
                     
-                    rating_increase = seven_day_rating - overall_rating
-                    player_rating_increases[player_id] = {
-                        "seven_day_rating": seven_day_rating,
-                        "overall_rating": overall_rating,
-                        "rating_increase": rating_increase
-                    }
-
-            # Find top 3 rating increases
-            if player_rating_increases:
-                top_players = sorted(
-                    player_rating_increases.items(), 
-                    key=lambda x: x[1]["rating_increase"], 
-                    reverse=True
-                )
-
-                pprint.pprint(top_players)
-
-                # Update PlayerOfTheWeek in DB
-                for idx, (player_id, stats) in enumerate(top_players, start=1):
-                    cursor.execute("""
-                        INSERT INTO CS2S_PlayerOfTheWeek (PlayerID, WeekPosition, BaseRating, WeekRating, RatingDelta) 
-                        VALUES (%s, %s, %s, %s, %s)
-                        """,
-                        (player_id, idx, stats["overall_rating"], stats["seven_day_rating"], stats["rating_increase"]))
+                    values = [
+                        (
+                            player_id,
+                            idx,
+                            stats["overall_rating"],
+                            stats["seven_day_rating"],
+                            stats["rating_increase"]
+                        )
+                        for idx, (player_id, stats) in enumerate(top_players, start=1)
+                    ]
+                    
+                    # Execute all inserts in a single batch
+                    cursor.executemany(insert_sql, values)
                                     
                 db.commit()
+                
 
-            return player_rating_increases
+                return player_rating_increases
 
         except Exception as e:
             error_traceback = traceback.format_exc()
             print(error_traceback)
             db.rollback()
+
 
 def get_all_players_stats_last_7_days(cursor):
     cursor.execute("""

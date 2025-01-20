@@ -3,3 +3,4 @@ flask_cors
 mysql-connector-python
 requests
 gunicorn
+APScheduler

@@ -41,4 +41,5 @@
 * Rename the `config_template.json` within `/instance/` to `config.json`
 * Fill out MySQL Server details within the newly-renamed `config.json`
 * Host the Flask app as you wish - I recommend this tutorial: <https://youtu.be/KWIIPKbdxD0>
+* Host the scheduler as you wish - I made a [service](https://gist.github.com/sarim-hk/b75d5d5fe427175baaa2e0f33e1ae468) for this
 * Done!

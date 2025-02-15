@@ -16,31 +16,66 @@ def match_panel_by_match_id():
              clutches, duels, kast_stats, blinds, damage_stats, player_teams) = fetch_match_data(cursor, match_id)
             
             players_stats = {}
+            
+            # Create a dict to track rounds played per side for each player
+            player_side_rounds = {}
+            
+            # Create player to team mapping
+            player_team_map = {player['PlayerID']: player['TeamID'] for player in player_teams}
+            
+            # Count rounds per side for each player first
+            for round in rounds:
+                winner_team = round['WinnerTeamID']
+                loser_team = round['LoserTeamID']
+                winner_side = round['WinnerSide']
+                loser_side = round['LoserSide']
+                
+                for player_id, team_id in player_team_map.items():
+                    if player_id not in player_side_rounds:
+                        player_side_rounds[player_id] = {'2': 0, '3': 0}
+                    
+                    if team_id == winner_team:
+                        player_side_rounds[player_id][str(winner_side)] += 1
+                    elif team_id == loser_team:
+                        player_side_rounds[player_id][str(loser_side)] += 1
 
             for kast in kast_stats:
                 player_id = kast['PlayerID']
-                # KAST events are tracked in Overall only since we don't have side info
+                player_side = kast['PlayerSide']
+                
                 if player_id not in players_stats:
                     players_stats[player_id] = _create_empty_side_stats(player_id)
 
                 players_stats[player_id]["Overall"]["KAST"] += 1
+                if player_side == 2:
+                    players_stats[player_id]["Terrorist"]["KAST"] += 1
+                elif player_side == 3:
+                    players_stats[player_id]["CounterTerrorist"]["KAST"] += 1
 
             for blind in blinds:
                 player_id = blind['ThrowerID']
-                # Blinds are tracked in Overall only since we don't have side info
+                thrower_side = blind['ThrowerSide']
+                
                 if player_id not in players_stats:
                     players_stats[player_id] = _create_empty_side_stats(player_id)
 
                 players_stats[player_id]["Overall"]["Blinds"]["Count"] += 1
                 players_stats[player_id]["Overall"]["Blinds"]["TotalDuration"] += blind['Duration']
+                
+                if thrower_side == 2:
+                    players_stats[player_id]["Terrorist"]["Blinds"]["Count"] += 1
+                    players_stats[player_id]["Terrorist"]["Blinds"]["TotalDuration"] += blind['Duration']
+                elif thrower_side == 3:
+                    players_stats[player_id]["CounterTerrorist"]["Blinds"]["Count"] += 1
+                    players_stats[player_id]["CounterTerrorist"]["Blinds"]["TotalDuration"] += blind['Duration']
 
             for death in deaths:
                 victim_id = death['VictimID']
                 attacker_id = death['AttackerID']
                 assister_id = death['AssisterID']
                 hitgroup = death['Hitgroup']
-                victim_side = death.get('VictimSide')  # Use VictimSide instead of Side
-
+                victim_side = death['VictimSide']
+                
                 if victim_id not in players_stats:
                     players_stats[victim_id] = _create_empty_side_stats(victim_id)
                     
@@ -81,7 +116,7 @@ def match_panel_by_match_id():
                 attacker_id = damage['AttackerID']
                 damage_amount = damage['Damage']
                 weapon = damage['Weapon']
-                victim_side = damage.get('VictimSide')  # Use VictimSide instead of Side
+                victim_side = damage['VictimSide']
 
                 if attacker_id:
                     if attacker_id not in players_stats:
@@ -100,28 +135,6 @@ def match_panel_by_match_id():
                         players_stats[attacker_id]["Terrorist"]["Damage"] += damage_amount
                         if weapon in ['smokegrenade', 'molotov', 'inferno', 'hegrenade', 'flashbang', 'decoy']:
                             players_stats[attacker_id]["Terrorist"]["UtilityDamage"] += damage_amount
-
-            # Create a dict to track rounds played per side for each player
-            player_side_rounds = {}
-            
-            # Create player to team mapping
-            player_team_map = {player['PlayerID']: player['TeamID'] for player in player_teams}
-            
-            # Count rounds per side for each player
-            for round in rounds:
-                winner_team = round['WinnerTeamID']
-                loser_team = round['LoserTeamID']
-                winner_side = round['WinnerSide']
-                loser_side = round['LoserSide']
-                
-                for player_id, team_id in player_team_map.items():
-                    if player_id not in player_side_rounds:
-                        player_side_rounds[player_id] = {'2': 0, '3': 0}
-                    
-                    if team_id == winner_team:
-                        player_side_rounds[player_id][str(winner_side)] += 1
-                    elif team_id == loser_team:
-                        player_side_rounds[player_id][str(loser_side)] += 1
 
             for player_id, stats in players_stats.items():
                 # Set common player info for all sides
@@ -255,7 +268,6 @@ def fetch_match_data(cursor, match_id):
     cursor.execute(damage_query, (match_id,))
     damage_stats = cursor.fetchall()
 
-    # Add query to get player teams for this match
     player_teams_query = """
         SELECT tp.PlayerID, tp.TeamID
         FROM CS2S_Team_Players tp

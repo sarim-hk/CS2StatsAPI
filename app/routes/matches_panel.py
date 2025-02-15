@@ -15,7 +15,9 @@ def matches_panel(query_extension="", params=None):
                 m.MapID,
                 m.MatchDate,
                 tr_w.TeamID AS WinningTeamID,
+                t_w.Name AS WinningTeamName,
                 tr_l.TeamID AS LosingTeamID,
+                t_l.Name AS LosingTeamName,
                 tr_w.Score AS WinningTeamScore,
                 tr_l.Score AS LosingTeamScore,
                 tr_w.Side AS WinningSide,
@@ -27,11 +29,15 @@ def matches_panel(query_extension="", params=None):
                 CS2S_TeamResult tr_w ON m.MatchID = tr_w.MatchID AND tr_w.Result = 'Win'
             JOIN 
                 CS2S_TeamResult tr_l ON m.MatchID = tr_l.MatchID AND tr_l.Result = 'Loss'
+            JOIN 
+                CS2S_Team t_w ON tr_w.TeamID = t_w.TeamID
+            JOIN 
+                CS2S_Team t_l ON tr_l.TeamID = t_l.TeamID
             {query_extension}
             ORDER BY 
                 m.MatchDate DESC
         """
-
+        
         cursor.execute(base_query, params or ())
         matches = cursor.fetchall()
         return jsonify(matches)

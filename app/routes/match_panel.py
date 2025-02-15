@@ -13,87 +13,151 @@ def match_panel_by_match_id():
             cursor = g.db.cursor(dictionary=True)
 
             (match, players_info_dict, team_results, rounds, deaths,
-             clutches, duels, kast_stats, blinds, damage_stats) = fetch_match_data(cursor, match_id)
+             clutches, duels, kast_stats, blinds, damage_stats, player_teams) = fetch_match_data(cursor, match_id)
             
             players_stats = {}
 
             for kast in kast_stats:
                 player_id = kast['PlayerID']
+                # KAST events are tracked in Overall only since we don't have side info
                 if player_id not in players_stats:
-                    players_stats[player_id] = _create_empty_playerstat(player_id)
+                    players_stats[player_id] = _create_empty_side_stats(player_id)
 
-                players_stats[player_id]["KAST"] += 1
+                players_stats[player_id]["Overall"]["KAST"] += 1
 
             for blind in blinds:
                 player_id = blind['ThrowerID']
+                # Blinds are tracked in Overall only since we don't have side info
                 if player_id not in players_stats:
-                    players_stats[player_id] = _create_empty_playerstat(player_id)
+                    players_stats[player_id] = _create_empty_side_stats(player_id)
 
-                players_stats[player_id]["Blinds"]["Count"] += 1
-                players_stats[player_id]["Blinds"]["TotalDuration"] += blind['Duration']
+                players_stats[player_id]["Overall"]["Blinds"]["Count"] += 1
+                players_stats[player_id]["Overall"]["Blinds"]["TotalDuration"] += blind['Duration']
 
             for death in deaths:
                 victim_id = death['VictimID']
                 attacker_id = death['AttackerID']
                 assister_id = death['AssisterID']
                 hitgroup = death['Hitgroup']
+                victim_side = death.get('VictimSide')  # Use VictimSide instead of Side
 
                 if victim_id not in players_stats:
-                    players_stats[victim_id] = _create_empty_playerstat(victim_id)
+                    players_stats[victim_id] = _create_empty_side_stats(victim_id)
                     
-                players_stats[victim_id]["Deaths"] += 1
+                players_stats[victim_id]["Overall"]["Deaths"] += 1
+                if victim_side == 2:
+                    players_stats[victim_id]["Terrorist"]["Deaths"] += 1
+                elif victim_side == 3:
+                    players_stats[victim_id]["CounterTerrorist"]["Deaths"] += 1
 
                 if attacker_id:
                     if attacker_id not in players_stats:
-                        players_stats[attacker_id] = _create_empty_playerstat(attacker_id)
+                        players_stats[attacker_id] = _create_empty_side_stats(attacker_id)
 
-                    players_stats[attacker_id]["Kills"] += 1
+                    players_stats[attacker_id]["Overall"]["Kills"] += 1
+                    if victim_side == 2:  # If victim was Terrorist, attacker was CT
+                        players_stats[attacker_id]["CounterTerrorist"]["Kills"] += 1
+                    elif victim_side == 3:  # If victim was CT, attacker was Terrorist
+                        players_stats[attacker_id]["Terrorist"]["Kills"] += 1
 
                     if hitgroup == 1:
-                        players_stats[attacker_id]["Headshots"] += 1
+                        players_stats[attacker_id]["Overall"]["Headshots"] += 1
+                        if victim_side == 2:
+                            players_stats[attacker_id]["CounterTerrorist"]["Headshots"] += 1
+                        elif victim_side == 3:
+                            players_stats[attacker_id]["Terrorist"]["Headshots"] += 1
 
                 if assister_id:
                     if assister_id not in players_stats:
-                        players_stats[assister_id] = _create_empty_playerstat(assister_id)
+                        players_stats[assister_id] = _create_empty_side_stats(assister_id)
 
-                    players_stats[assister_id]["Assists"] += 1
+                    players_stats[assister_id]["Overall"]["Assists"] += 1
+                    if victim_side == 2:
+                        players_stats[assister_id]["CounterTerrorist"]["Assists"] += 1
+                    elif victim_side == 3:
+                        players_stats[assister_id]["Terrorist"]["Assists"] += 1
 
             for damage in damage_stats:
                 attacker_id = damage['AttackerID']
                 damage_amount = damage['Damage']
                 weapon = damage['Weapon']
+                victim_side = damage.get('VictimSide')  # Use VictimSide instead of Side
 
                 if attacker_id:
                     if attacker_id not in players_stats:
-                        players_stats[attacker_id] = _create_empty_playerstat(attacker_id)
+                        players_stats[attacker_id] = _create_empty_side_stats(attacker_id)
 
-                    players_stats[attacker_id]["Damage"] += damage_amount
+                    players_stats[attacker_id]["Overall"]["Damage"] += damage_amount
                     
                     if weapon in ['smokegrenade', 'molotov', 'inferno', 'hegrenade', 'flashbang', 'decoy']:
-                        players_stats[attacker_id]["UtilityDamage"] += damage_amount
+                        players_stats[attacker_id]["Overall"]["UtilityDamage"] += damage_amount
+                    
+                    if victim_side == 2:  # If victim was Terrorist, attacker was CT
+                        players_stats[attacker_id]["CounterTerrorist"]["Damage"] += damage_amount
+                        if weapon in ['smokegrenade', 'molotov', 'inferno', 'hegrenade', 'flashbang', 'decoy']:
+                            players_stats[attacker_id]["CounterTerrorist"]["UtilityDamage"] += damage_amount
+                    elif victim_side == 3:  # If victim was CT, attacker was Terrorist
+                        players_stats[attacker_id]["Terrorist"]["Damage"] += damage_amount
+                        if weapon in ['smokegrenade', 'molotov', 'inferno', 'hegrenade', 'flashbang', 'decoy']:
+                            players_stats[attacker_id]["Terrorist"]["UtilityDamage"] += damage_amount
 
-            total_rounds = len(rounds)
+            # Create a dict to track rounds played per side for each player
+            player_side_rounds = {}
+            
+            # Create player to team mapping
+            player_team_map = {player['PlayerID']: player['TeamID'] for player in player_teams}
+            
+            # Count rounds per side for each player
+            for round in rounds:
+                winner_team = round['WinnerTeamID']
+                loser_team = round['LoserTeamID']
+                winner_side = round['WinnerSide']
+                loser_side = round['LoserSide']
+                
+                for player_id, team_id in player_team_map.items():
+                    if player_id not in player_side_rounds:
+                        player_side_rounds[player_id] = {'2': 0, '3': 0}
+                    
+                    if team_id == winner_team:
+                        player_side_rounds[player_id][str(winner_side)] += 1
+                    elif team_id == loser_team:
+                        player_side_rounds[player_id][str(loser_side)] += 1
+
             for player_id, stats in players_stats.items():
-                stats["Rounds"] = total_rounds
-                stats["Username"] = players_info_dict[player_id]["Username"]
-                stats["AvatarL"] = players_info_dict[player_id]["AvatarL"]
-
-                if total_rounds > 0:
-                    stats["KAST"] = round((stats["KAST"] / total_rounds) * 100, 2)
+                # Set common player info for all sides
+                for side in ["Overall", "Terrorist", "CounterTerrorist"]:
+                    stats[side]["Username"] = players_info_dict[player_id]["Username"]
+                    stats[side]["AvatarL"] = players_info_dict[player_id]["AvatarL"]
                 
-                stats["KPR"] = round(stats["Kills"] / total_rounds, 2) if total_rounds > 0 else 0
-                stats["DPR"] = round(stats["Deaths"] / total_rounds, 2) if total_rounds > 0 else 0
-                stats["ADR"] = round(stats["Damage"] / total_rounds, 2) if total_rounds > 0 else 0
-
-                stats["Impact"] = round(2.13 * stats["KPR"] + 0.42 * (stats["Assists"] / total_rounds) - 0.41, 2) if total_rounds > 0 else 0
-                stats["Rating"] = round((0.0073 * stats["KAST"] + 0.3591 * stats["KPR"] + -0.5329 * stats["DPR"] + 0.2372 *
-                                stats["Impact"] + 0.0032 * stats["ADR"] + 0.1587), 2)
+                # Get the actual rounds played per side for this player
+                if player_id in player_side_rounds:
+                    t_rounds = player_side_rounds[player_id]['2']  # Terrorist rounds
+                    ct_rounds = player_side_rounds[player_id]['3']  # CT rounds
+                    total_rounds = t_rounds + ct_rounds
+                else:
+                    t_rounds = 0
+                    ct_rounds = 0
+                    total_rounds = 0
                 
+                # Calculate stats for each side
+                _calculate_derived_stats(stats["Overall"], total_rounds)
+                _calculate_derived_stats(stats["Terrorist"], t_rounds)
+                _calculate_derived_stats(stats["CounterTerrorist"], ct_rounds)
+
             teams = {}
             for team_result in team_results:
                 team_id = team_result["TeamID"]
                 
-                teams[team_id] = {**team_result, "Players": {}}
+                # Fetch team name
+                team_name_query = "SELECT Name FROM CS2S_Team WHERE TeamID = %s"
+                cursor.execute(team_name_query, (team_id,))
+                team_name_result = cursor.fetchone()
+                
+                teams[team_id] = {
+                    **team_result, 
+                    "TeamName": team_name_result['Name'],
+                    "Players": {}
+                }
                 
                 team_players_query = """
                     SELECT PlayerID FROM CS2S_Team_Players
@@ -111,6 +175,7 @@ def match_panel_by_match_id():
             match['Clutches'] = clutches
             match['Duels'] = duels
             match['Rounds'] = rounds
+            match['Deaths'] = deaths
 
             return jsonify(match)
 
@@ -126,16 +191,23 @@ def match_panel_by_match_id():
 
 def _create_empty_playerstat(player_id):
     return {
-    "PlayerID": player_id,
-    "KAST": 0,
-    "Blinds": {"Count": 0, "TotalDuration": 0.0},
-    "Deaths": 0,
-    "Kills": 0,
-    "Assists": 0,
-    "Damage": 0,
-    "UtilityDamage": 0,
-    "Rounds": 0,
-    "Headshots": 0
+        "PlayerID": player_id,
+        "KAST": 0,
+        "Blinds": {"Count": 0, "TotalDuration": 0.0},
+        "Deaths": 0,
+        "Kills": 0,
+        "Assists": 0,
+        "Damage": 0,
+        "UtilityDamage": 0,
+        "Rounds": 0,
+        "Headshots": 0
+    }
+
+def _create_empty_side_stats(player_id):
+    return {
+        "Overall": _create_empty_playerstat(player_id),
+        "Terrorist": _create_empty_playerstat(player_id),
+        "CounterTerrorist": _create_empty_playerstat(player_id)
     }
 
 def fetch_match_data(cursor, match_id):
@@ -183,4 +255,35 @@ def fetch_match_data(cursor, match_id):
     cursor.execute(damage_query, (match_id,))
     damage_stats = cursor.fetchall()
 
-    return match, players_info_dict, team_results, rounds, deaths, clutches, duels, kast_stats, blinds, damage_stats
+    # Add query to get player teams for this match
+    player_teams_query = """
+        SELECT tp.PlayerID, tp.TeamID
+        FROM CS2S_Team_Players tp
+        JOIN CS2S_TeamResult tr ON tp.TeamID = tr.TeamID
+        WHERE tr.MatchID = %s
+    """
+    
+    cursor.execute(player_teams_query, (match_id,))
+    player_teams = cursor.fetchall()
+    
+    return match, players_info_dict, team_results, rounds, deaths, clutches, duels, kast_stats, blinds, damage_stats, player_teams
+
+def _calculate_derived_stats(stats, total_rounds):
+    """Calculate derived statistics for a given side's stats"""
+    if total_rounds > 0:
+        stats["Rounds"] = total_rounds
+        stats["KAST"] = round((stats["KAST"] / total_rounds) * 100, 2)
+        stats["KPR"] = round(stats["Kills"] / total_rounds, 2)
+        stats["DPR"] = round(stats["Deaths"] / total_rounds, 2)
+        stats["ADR"] = round(stats["Damage"] / total_rounds, 2)
+        stats["Impact"] = round(2.13 * stats["KPR"] + 0.42 * (stats["Assists"] / total_rounds) - 0.41, 2)
+        stats["Rating"] = round((0.0073 * stats["KAST"] + 0.3591 * stats["KPR"] + -0.5329 * stats["DPR"] + 
+                               0.2372 * stats["Impact"] + 0.0032 * stats["ADR"] + 0.1587), 2)
+    else:
+        stats["Rounds"] = 0
+        stats["KAST"] = 0
+        stats["KPR"] = 0
+        stats["DPR"] = 0
+        stats["ADR"] = 0
+        stats["Impact"] = 0
+        stats["Rating"] = 0

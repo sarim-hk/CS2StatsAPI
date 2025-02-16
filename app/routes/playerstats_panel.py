@@ -337,7 +337,6 @@ def get_stats(cursor, round_ids, player_id):
         stats["DPR"],
         stats["KAST"],
         stats["ADR"],
-        stats["RoundsPlayed"]
     )
     
     stats["KAST"] = round(stats["KAST"], 2) or 0
@@ -379,7 +378,6 @@ def combine_stats(t_stats, ct_stats):
         stats["DPR"],
         stats["KAST"],
         stats["ADR"],
-        stats["RoundsPlayed"]
     )
 
     stats["KAST"] = round(stats["KAST"], 2) or 0

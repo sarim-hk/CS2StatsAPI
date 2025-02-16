@@ -280,15 +280,20 @@ def fetch_match_data(cursor, match_id):
     
     return match, players_info_dict, team_results, rounds, deaths, clutches, duels, kast_stats, blinds, damage_stats, player_teams
 
+def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
+    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0
+    rating = round(((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr)  + 0.1587), 2) or 0
+    return impact, rating
+
 def _calculate_derived_stats(stats, total_rounds):
     """Calculate derived statistics for a given side's stats"""
     if total_rounds > 0:
         stats["Rounds"] = total_rounds
-        stats["KAST"] = round((stats["KAST"] / total_rounds) * 100, 2)
-        stats["KPR"] = round(stats["Kills"] / total_rounds, 2)
-        stats["DPR"] = round(stats["Deaths"] / total_rounds, 2)
-        stats["ADR"] = round(stats["Damage"] / total_rounds, 2)
-        stats["Impact"] = round(2.13 * stats["KPR"] + 0.42 * (stats["Assists"] / total_rounds) - 0.41, 2)
+        stats["KAST"] = (stats["KAST"] / total_rounds) * 100
+        stats["KPR"] = stats["Kills"] / total_rounds
+        stats["DPR"] = stats["Deaths"] / total_rounds
+        stats["ADR"] = stats["Damage"] / total_rounds
+        stats["Impact"] = (2.13 * stats["KPR"] + 0.42 * (stats["Assists"] / total_rounds) - 0.41)
         stats["Rating"] = round((0.0073 * stats["KAST"] + 0.3591 * stats["KPR"] + -0.5329 * stats["DPR"] + 
                                0.2372 * stats["Impact"] + 0.0032 * stats["ADR"] + 0.1587), 2)
     else:

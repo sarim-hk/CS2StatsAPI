@@ -235,8 +235,10 @@ def filter_match_ids_by_map(cursor, match_ids, map_id):
     return filtered_match_ids
 
 def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
-    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0
-    rating = ((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr)  + 0.1587) or 0
+    # Convert inputs to float to ensure float arithmetic
+    kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
+    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
+    rating = ((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr) + 0.1587) or 0.0
     return impact, rating
 
 def get_stats(cursor, round_ids, player_id):
@@ -325,11 +327,12 @@ def get_stats(cursor, round_ids, player_id):
         "RoundsKAST": result['RoundsKAST']
     }
 
-    stats["KAST"] = ((stats["RoundsKAST"] / stats["RoundsPlayed"]) * 100) or 0
-    stats["ADR"] = (stats["Damage"] / stats["RoundsPlayed"]) or 0
-    stats["KPR"] = (stats["Kills"] / stats["RoundsPlayed"]) or 0
-    stats["APR"] = (stats["Assists"] / stats["RoundsPlayed"]) or 0
-    stats["DPR"] = (stats["Deaths"] / stats["RoundsPlayed"]) or 0
+    # Ensure float division
+    stats["KAST"] = (float(stats["RoundsKAST"]) / float(stats["RoundsPlayed"]) * 100.0) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["ADR"] = float(stats["Damage"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["KPR"] = float(stats["Kills"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["APR"] = float(stats["Assists"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["DPR"] = float(stats["Deaths"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
 
     stats["Impact"], stats["Rating"] = calculate_impact_and_rating(
         stats["KPR"],
@@ -366,11 +369,12 @@ def combine_stats(t_stats, ct_stats):
         "RoundsKAST": t_stats["RoundsKAST"] + ct_stats["RoundsKAST"]
     }
 
-    stats["KAST"] = ((stats["RoundsKAST"] / stats["RoundsPlayed"]) * 100) or 0
-    stats["ADR"] = stats["Damage"] / stats["RoundsPlayed"], 2 or 0
-    stats["KPR"] = stats["Kills"] / stats["RoundsPlayed"], 2 or 0
-    stats["APR"] = stats["Assists"] / stats["RoundsPlayed"], 2 or 0
-    stats["DPR"] = stats["Deaths"] / stats["RoundsPlayed"], 2 or 0
+    # Fix float division and remove tuple creation
+    stats["KAST"] = (float(stats["RoundsKAST"]) / float(stats["RoundsPlayed"]) * 100.0) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["ADR"] = float(stats["Damage"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["KPR"] = float(stats["Kills"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["APR"] = float(stats["Assists"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
+    stats["DPR"] = float(stats["Deaths"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
     
     stats["Impact"], stats["Rating"] = calculate_impact_and_rating(
         stats["KPR"],
@@ -387,6 +391,5 @@ def combine_stats(t_stats, ct_stats):
     stats["DPR"] = round(stats["DPR"], 2) or 0
     stats["Impact"] = round(stats["Impact"], 2) or 0
     stats["Rating"] = round(stats["Rating"], 2) or 0
-
 
     return stats

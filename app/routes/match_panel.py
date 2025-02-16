@@ -281,21 +281,22 @@ def fetch_match_data(cursor, match_id):
     return match, players_info_dict, team_results, rounds, deaths, clutches, duels, kast_stats, blinds, damage_stats, player_teams
 
 def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
-    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0
-    rating = ((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr)  + 0.1587) or 0
+    # Convert inputs to float to ensure float arithmetic
+    kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
+    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
+    rating = ((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr) + 0.1587) or 0.0
     return impact, rating
-
-
 
 def _calculate_derived_stats(stats, total_rounds):
     """Calculate derived statistics for a given side's stats"""
     if total_rounds > 0:
+        total_rounds = float(total_rounds)  # Ensure total_rounds is float
         stats["Rounds"] = total_rounds
-        stats["KAST"] = (stats["KAST"] / total_rounds) * 100
-        stats["KPR"] = stats["Kills"] / total_rounds
-        stats["APR"] = stats["Assists"] / total_rounds
-        stats["DPR"] = stats["Deaths"] / total_rounds
-        stats["ADR"] = stats["Damage"] / total_rounds
+        stats["KAST"] = (float(stats["KAST"]) / total_rounds) * 100.0
+        stats["KPR"] = float(stats["Kills"]) / total_rounds
+        stats["APR"] = float(stats["Assists"]) / total_rounds
+        stats["DPR"] = float(stats["Deaths"]) / total_rounds
+        stats["ADR"] = float(stats["Damage"]) / total_rounds
 
         stats["Impact"], stats["Rating"] = calculate_impact_and_rating(
             stats["KPR"],
@@ -305,20 +306,22 @@ def _calculate_derived_stats(stats, total_rounds):
             stats["ADR"]
         )
 
-        stats["KAST"] = round(stats["KAST"], 2) or 0
-        stats["KPR"] = round(stats["KPR"], 2) or 0
-        stats["APR"] = round(stats["APR"], 2) or 0
-        stats["DPR"] = round(stats["DPR"], 2) or 0
-        stats["ADR"] = round(stats["ADR"], 2) or 0
-        stats["Impact"] = round(stats["Impact"], 2) or 0
-        stats["Rating"] = round(stats["Rating"], 2) or 0
+        # Round results to 2 decimal places, with 0.0 as fallback
+        stats["KAST"] = round(stats["KAST"], 2) or 0.0
+        stats["KPR"] = round(stats["KPR"], 2) or 0.0
+        stats["APR"] = round(stats["APR"], 2) or 0.0
+        stats["DPR"] = round(stats["DPR"], 2) or 0.0
+        stats["ADR"] = round(stats["ADR"], 2) or 0.0
+        stats["Impact"] = round(stats["Impact"], 2) or 0.0
+        stats["Rating"] = round(stats["Rating"], 2) or 0.0
 
     else:
-        stats["Rounds"] = 0
-        stats["KAST"] = 0
-        stats["KPR"] = 0
-        stats["APR"] = 0
-        stats["DPR"] = 0
-        stats["ADR"] = 0
-        stats["Impact"] = 0
-        stats["Rating"] = 0
+        # Set all stats to 0.0 when there are no rounds
+        stats["Rounds"] = 0.0
+        stats["KAST"] = 0.0
+        stats["KPR"] = 0.0
+        stats["APR"] = 0.0
+        stats["DPR"] = 0.0
+        stats["ADR"] = 0.0
+        stats["Impact"] = 0.0
+        stats["Rating"] = 0.0

@@ -234,6 +234,11 @@ def filter_match_ids_by_map(cursor, match_ids, map_id):
     filtered_match_ids = [row['MatchID'] for row in result]
     return filtered_match_ids
 
+def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
+    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0
+    rating = round(((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr)  + 0.1587), 2) or 0
+    return impact, rating
+
 def get_stats(cursor, round_ids, player_id):
     cursor.execute(f"""
     WITH 
@@ -320,14 +325,20 @@ def get_stats(cursor, round_ids, player_id):
         "RoundsKAST": result['RoundsKAST']
     }
 
-    stats["KAST"] = round(((stats["RoundsKAST"] / stats["RoundsPlayed"]) * 100), 2) or 0
-    stats["ADR"] = round(stats["Damage"] / stats["RoundsPlayed"], 2) or 0
-    stats["KPR"] = round(stats["Kills"] / stats["RoundsPlayed"], 2) or 0
-    stats["APR"] = round(stats["Assists"] / stats["RoundsPlayed"], 2) or 0
-    stats["DPR"] = round(stats["Deaths"] / stats["RoundsPlayed"], 2) or 0
+    stats["KAST"] = ((stats["RoundsKAST"] / stats["RoundsPlayed"]) * 100) or 0
+    stats["ADR"] = (stats["Damage"] / stats["RoundsPlayed"]) or 0
+    stats["KPR"] = (stats["Kills"] / stats["RoundsPlayed"]) or 0
+    stats["APR"] = (stats["Assists"] / stats["RoundsPlayed"]) or 0
+    stats["DPR"] = (stats["Deaths"] / stats["RoundsPlayed"]) or 0
 
-    stats["Impact"] = round(2.13 * float(stats["KPR"]) + 0.42 * (float(stats["Assists"]) / float(stats["RoundsPlayed"])) - 0.41, 2) or 0
-    stats["Rating"] = round((0.0073 * float(stats["KAST"]) + 0.3591 * float(stats["KPR"]) + -0.5329 * float(stats["DPR"]) + 0.2372 * float(stats["Impact"]) + 0.0032 * float(stats["ADR"]) + 0.1587), 2) or 0
+    stats["Impact"], stats["Rating"] = calculate_impact_and_rating(
+        stats["KPR"],
+        stats["APR"],
+        stats["DPR"],
+        stats["KAST"],
+        stats["ADR"],
+        stats["RoundsPlayed"]
+    )
     
     return stats
 
@@ -348,13 +359,19 @@ def combine_stats(t_stats, ct_stats):
         "RoundsKAST": t_stats["RoundsKAST"] + ct_stats["RoundsKAST"]
     }
 
-    stats["KAST"] = round(((stats["RoundsKAST"] / stats["RoundsPlayed"]) * 100), 2) or 0
-    stats["ADR"] = round(stats["Damage"] / stats["RoundsPlayed"], 2) or 0
-    stats["KPR"] = round(stats["Kills"] / stats["RoundsPlayed"], 2) or 0
-    stats["APR"] = round(stats["Assists"] / stats["RoundsPlayed"], 2) or 0
-    stats["DPR"] = round(stats["Deaths"] / stats["RoundsPlayed"], 2) or 0
+    stats["KAST"] = ((stats["RoundsKAST"] / stats["RoundsPlayed"]) * 100) or 0
+    stats["ADR"] = stats["Damage"] / stats["RoundsPlayed"], 2 or 0
+    stats["KPR"] = stats["Kills"] / stats["RoundsPlayed"], 2 or 0
+    stats["APR"] = stats["Assists"] / stats["RoundsPlayed"], 2 or 0
+    stats["DPR"] = stats["Deaths"] / stats["RoundsPlayed"], 2 or 0
 
-    stats["Impact"] = round(2.13 * float(stats["KPR"]) + 0.42 * (float(stats["Assists"]) / float(stats["RoundsPlayed"])) - 0.41, 2) or 0
-    stats["Rating"] = round((0.0073 * float(stats["KAST"]) + 0.3591 * float(stats["KPR"]) + -0.5329 * float(stats["DPR"]) + 0.2372 * float(stats["Impact"]) + 0.0032 * float(stats["ADR"]) + 0.1587), 2) or 0
+    stats["Impact"], stats["Rating"] = calculate_impact_and_rating(
+        stats["KPR"],
+        stats["APR"],
+        stats["DPR"],
+        stats["KAST"],
+        stats["ADR"],
+        stats["RoundsPlayed"]
+    )
 
     return stats

@@ -9,25 +9,55 @@ def live_match_panel():
     cursor = None
     try:
         cursor = g.db.cursor(dictionary=True)
+        
+        # First get the match status
         cursor.execute(
             """
-            SELECT TPlayers, CTPlayers, TScore, CTScore, BombStatus, 
+            SELECT TScore, CTScore, BombStatus, MapID, 
                    UNIX_TIMESTAMP(InsertDate) AS InsertDate 
-            FROM CS2S_Live 
+            FROM CS2S_LiveStatus 
             WHERE StaticID = 1
-        """
+            """
         )
+        match_status = cursor.fetchone()
 
-        match = cursor.fetchone()
-
-        if match is None:
+        if match_status is None:
             return jsonify({"error": "No match found."}), 404
 
-        for key, value in match.items():
-            if value is None:
-                return jsonify({"error": f"The field '{key}' is null."}), 400
+        # Get T-side players
+        cursor.execute(
+            """
+            SELECT CS2S_LivePlayers.PlayerID, CS2S_PlayerInfo.Username, Kills, Assists, Deaths, ADR, Health, Money
+            FROM CS2S_LivePlayers
+            INNER JOIN CS2S_PlayerInfo ON CS2S_LivePlayers.PlayerID = CS2S_PlayerInfo.PlayerID
+            WHERE Side = 2
+            """
+        )
+        t_players = cursor.fetchall()
 
-        return jsonify(match)
+        # Get CT-side players
+        cursor.execute(
+            """
+            SELECT CS2S_LivePlayers.PlayerID, CS2S_PlayerInfo.Username, Kills, Assists, Deaths, ADR, Health, Money
+            FROM CS2S_LivePlayers
+            INNER JOIN CS2S_PlayerInfo ON CS2S_LivePlayers.PlayerID = CS2S_PlayerInfo.PlayerID
+            WHERE Side = 3
+            """
+        )
+        ct_players = cursor.fetchall()
+
+        # Combine all data
+        response = {
+            "TScore": match_status["TScore"],
+            "CTScore": match_status["CTScore"],
+            "BombStatus": match_status["BombStatus"],
+            "InsertDate": match_status["InsertDate"],
+            "MapID": match_status["MapID"],
+            "TPlayers": t_players,
+            "CTPlayers": ct_players
+        }
+
+        return jsonify(response)
 
     except Error as e:
         print(f"Error: {e}")

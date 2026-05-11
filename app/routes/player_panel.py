@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request, g, current_app
 from mysql.connector import Error
 
+from .player_info_sql import player_info_select_sql
+
 player_panel_bp = Blueprint("player_panel_bp", __name__)
 
 @player_panel_bp.route("/player_panel_by_player_id")
@@ -9,9 +11,9 @@ def player_panel_by_player_id():
     player_id = request.args.get("player_id")
     try:
         cursor = g.db.cursor(dictionary=True)
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT 
-                p.*,
+                {player_info_select_sql("p")},
                 pow.WeekPosition
             FROM CS2S_PlayerInfo p
             LEFT JOIN CS2S_PlayerOfTheWeek pow 

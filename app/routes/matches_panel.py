@@ -9,6 +9,9 @@ def matches_panel(query_extension="", params=None):
     try:
         cursor = g.db.cursor(dictionary=True)
         
+        # Get page parameter if provided
+        page = request.args.get('page', type=int)
+        
         base_query = f"""
             SELECT 
                 m.MatchID,
@@ -36,8 +39,18 @@ def matches_panel(query_extension="", params=None):
             {query_extension}
             ORDER BY 
                 m.MatchDate DESC
+            {" LIMIT %s OFFSET %s" if page is not None else ""}
         """
         
+        # Add pagination parameters only if page is provided
+        if page is not None:
+            per_page = 25
+            offset = (page - 1) * per_page
+            if params:
+                params = list(params) + [per_page, offset]
+            else:
+                params = [per_page, offset]
+
         cursor.execute(base_query, params or ())
         matches = cursor.fetchall()
         return jsonify(matches)

@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, g, request
 from mysql.connector import Error
 
+from .player_info_sql import avatar_url_sql
+
 match_panel_bp = Blueprint('match_panel_bp', __name__)
 
 @match_panel_bp.route("/match_panel_by_match_id")
@@ -180,7 +182,7 @@ def match_panel_by_match_id():
                 team_players = cursor.fetchall()
 
                 for player in team_players:
-                    player_id = player['PlayerID']
+                    player_id = str(player['PlayerID'])
                     if player_id in players_stats:
                         teams[team_id]["Players"][player_id] = players_stats[player_id]
 
@@ -225,7 +227,13 @@ def _create_empty_side_stats(player_id):
 
 def fetch_match_data(cursor, match_id):
     match_query = "SELECT * FROM CS2S_Match WHERE MatchID = %s"
-    players_info_query = "SELECT PlayerID, Username, AvatarL FROM CS2S_PlayerInfo"
+    players_info_query = f"""
+        SELECT
+            PlayerID,
+            Username,
+            {avatar_url_sql("CS2S_PlayerInfo", "full")} AS AvatarL
+        FROM CS2S_PlayerInfo
+    """
     team_results_query = "SELECT * FROM CS2S_TeamResult WHERE MatchID = %s"
     rounds_query = "SELECT * FROM CS2S_Round WHERE MatchID = %s"
     deaths_query = "SELECT * FROM CS2S_Death WHERE MatchID = %s"
@@ -242,7 +250,8 @@ def fetch_match_data(cursor, match_id):
 
     cursor.execute(players_info_query)
     players_info = cursor.fetchall()
-    players_info_dict = {player['PlayerID']: player for player in players_info}
+    # Convert PlayerIDs to strings in the players_info_dict
+    players_info_dict = {str(player['PlayerID']): player for player in players_info}
 
     cursor.execute(team_results_query, (match_id,))
     team_results = cursor.fetchall()
@@ -252,21 +261,47 @@ def fetch_match_data(cursor, match_id):
 
     cursor.execute(deaths_query, (match_id,))
     deaths = cursor.fetchall()
+    # Convert PlayerIDs to strings in deaths
+    for death in deaths:
+        death['VictimID'] = str(death['VictimID'])
+        if death['AttackerID']:
+            death['AttackerID'] = str(death['AttackerID'])
+        if death['AssisterID']:
+            death['AssisterID'] = str(death['AssisterID'])
 
     cursor.execute(clutches_query, (match_id,))
     clutches = cursor.fetchall()
+    # Convert PlayerIDs to strings in clutches
+    for clutch in clutches:
+        clutch['PlayerID'] = str(clutch['PlayerID'])
 
     cursor.execute(duels_query, (match_id,))
     duels = cursor.fetchall()
+    # Convert PlayerIDs to strings in duels
+    for duel in duels:
+        duel['WinnerID'] = str(duel['WinnerID'])
+        duel['LoserID'] = str(duel['LoserID'])
 
     cursor.execute(kast_query, (match_id,))
     kast_stats = cursor.fetchall()
+    # Convert PlayerIDs to strings in kast_stats
+    for kast in kast_stats:
+        kast['PlayerID'] = str(kast['PlayerID'])
 
     cursor.execute(blinds_query, (match_id,))
     blinds = cursor.fetchall()
+    # Convert PlayerIDs to strings in blinds
+    for blind in blinds:
+        blind['ThrowerID'] = str(blind['ThrowerID'])
+        blind['BlindedID'] = str(blind['BlindedID'])
 
     cursor.execute(damage_query, (match_id,))
     damage_stats = cursor.fetchall()
+    # Convert PlayerIDs to strings in damage_stats
+    for damage in damage_stats:
+        damage['VictimID'] = str(damage['VictimID'])
+        if damage['AttackerID']:
+            damage['AttackerID'] = str(damage['AttackerID'])
 
     player_teams_query = """
         SELECT tp.PlayerID, tp.TeamID
@@ -277,6 +312,9 @@ def fetch_match_data(cursor, match_id):
     
     cursor.execute(player_teams_query, (match_id,))
     player_teams = cursor.fetchall()
+    # Convert PlayerIDs to strings in player_teams
+    for player_team in player_teams:
+        player_team['PlayerID'] = str(player_team['PlayerID'])
     
     return match, players_info_dict, team_results, rounds, deaths, clutches, duels, kast_stats, blinds, damage_stats, player_teams
 

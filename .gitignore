@@ -2,3 +2,7 @@ __pycache__
 config.json
 .venv
 venv
+Caddyfile
+docker-compose.yml
+Dockerfile
+start.sh

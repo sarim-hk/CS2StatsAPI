@@ -7,8 +7,8 @@ from app.database import DatabaseConnection, DatabaseCursor, get_db
 router = APIRouter()
 
 
-@router.get("/playerelo_panel_by_player_id")
-def playerelo_panel_by_player_id(
+@router.get("/playerelo_panel")
+def playerelo_panel(
     player_id: str = Query(...),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:

@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
-from flask import Blueprint, jsonify, g, request
 import traceback
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.database import DatabaseConnection, get_db
 
 utility_weapons = ["smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"]
 
@@ -24,45 +28,39 @@ match_ranges = {
     "100matches": 100,
 }
 
-playerstats_panel_bp = Blueprint("playerstats_panel_bp", __name__)
+router = APIRouter()
 
-@playerstats_panel_bp.route("/playerstats_panel_by_player_id")
-def playerstats_panel_by_player_id():
-    # Split player_ids and validate
-    player_ids_str = request.args.get("player_id")
-    if not player_ids_str:
-        return jsonify({"error": "player_id is required"}), 400
-    
-    # Split player IDs and convert to list
-    player_ids = [pid.strip() for pid in player_ids_str.split(',')]
-    
-    # Remove any empty strings
+
+@router.get("/playerstats_panel_by_player_id")
+def playerstats_panel_by_player_id(
+    player_id: str = Query(...),
+    map_id: str | None = None,
+    range: str = Query("overall"),  # noqa: A002 - preserve public query parameter name.
+    db: DatabaseConnection = Depends(get_db),
+) -> dict[str, Any]:
+    player_ids = [pid.strip() for pid in player_id.split(",")]
     player_ids = [pid for pid in player_ids if pid]
-    
+
     if not player_ids:
-        return jsonify({"error": "No valid player IDs provided"}), 400
+        raise HTTPException(status_code=400, detail="No valid player IDs provided")
 
-    map_id = request.args.get("map_id")
-    range = request.args.get("range", "overall")
-
-    # Validate range
     if range not in date_ranges and range not in match_ranges:
-        return jsonify({"error": f"range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}"}), 400
-    
-    try:
-        cursor = g.db.cursor(dictionary=True)
+        raise HTTPException(
+            status_code=400,
+            detail=f"range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}",
+        )
 
-        # Prepare to collect stats for each player
+    cursor = None
+    try:
+        cursor = db.cursor(dictionary=True)
         all_player_stats = {}
 
         for player_id in player_ids:
-            # Fetch matches based on range for this specific player
             if range in date_ranges:
                 results = get_match_results_date_range(cursor, range, [player_id], map_id)
-            elif range in match_ranges:
+            else:
                 results = get_match_results_match_range(cursor, range, [player_id], map_id)
 
-            # If no matches found for this player
             if not results:
                 all_player_stats[player_id] = {
                     "Overall": 0,
@@ -74,22 +72,15 @@ def playerstats_panel_by_player_id():
                 }
                 continue
 
-            # Extract match IDs
             match_ids = list(set(result["MatchID"] for result in results))
             matches_won = sum(1 for result in results if result["Result"] == "Win")
             matches_played = len(match_ids)
 
-            # Get round IDs for this specific player
             t_round_ids, ct_round_ids = get_split_round_ids_from_match_ids(cursor, match_ids, player_id)
-            
-            # Get stats for T and CT sides
             t_stats = get_stats(cursor, t_round_ids, player_id)
             ct_stats = get_stats(cursor, ct_round_ids, player_id)
-            
-            # Combine stats
             combined_stats = combine_stats(t_stats, ct_stats)
 
-            # Store stats for this player
             all_player_stats[player_id] = {
                 "Overall": combined_stats or 0,
                 "Terrorist": t_stats or 0,
@@ -99,18 +90,24 @@ def playerstats_panel_by_player_id():
                 "MatchIDs": match_ids or [],
             }
 
-        return jsonify(all_player_stats)
+        return all_player_stats
 
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         error_message = str(e)
         error_traceback = traceback.format_exc()
 
         print(error_traceback)
 
-        return jsonify({
-            "error": error_message,
-            "traceback": error_traceback
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={"error": error_message, "traceback": error_traceback},
+        ) from e
+
+    finally:
+        if cursor:
+            cursor.close()
 
 def get_match_results_match_range(cursor, range, player_ids, map_id=None): 
     match_range = match_ranges[range]
@@ -241,7 +238,33 @@ def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     rating = ((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr) + 0.1587) or 0.0
     return impact, rating
 
+
+def empty_stats(player_id):
+    return {
+        "PlayerID": player_id,
+        "Damage": 0,
+        "UtilityDamage": 0,
+        "Kills": 0,
+        "Assists": 0,
+        "Deaths": 0,
+        "Headshots": 0,
+        "Blinds": {"Count": 0, "TotalDuration": 0.0},
+        "RoundsPlayed": 0,
+        "RoundsKAST": 0,
+        "KAST": 0,
+        "ADR": 0,
+        "KPR": 0,
+        "APR": 0,
+        "DPR": 0,
+        "Impact": 0,
+        "Rating": 0,
+    }
+
+
 def get_stats(cursor, round_ids, player_id):
+    if not round_ids:
+        return empty_stats(player_id)
+
     cursor.execute(f"""
     WITH 
     damage_stats AS (
@@ -294,13 +317,13 @@ def get_stats(cursor, round_ids, player_id):
         %s AS RoundsPlayed,
         COALESCE(k.KAST, 0) AS RoundsKAST
     FROM 
-        damage_stats d
-    CROSS JOIN 
         death_stats ds
+    LEFT JOIN
+        damage_stats d ON d.AttackerID = ds.PlayerID
     LEFT JOIN 
-        blind_stats b ON d.AttackerID = b.ThrowerID
+        blind_stats b ON ds.PlayerID = b.ThrowerID
     LEFT JOIN 
-        kast_stats k ON d.AttackerID = k.PlayerID
+        kast_stats k ON ds.PlayerID = k.PlayerID
     """, (
         *utility_weapons, *utility_weapons, *utility_weapons, player_id, *round_ids,
         player_id, player_id, player_id, player_id, player_id, *round_ids,
@@ -310,6 +333,8 @@ def get_stats(cursor, round_ids, player_id):
     ))
 
     result = cursor.fetchone()
+    if result is None:
+        return empty_stats(player_id)
     
     stats = {
         "PlayerID": player_id,

@@ -1,6 +1,6 @@
-flask
-flask_cors
+fastapi
+uvicorn[standard]
 mysql-connector-python
+pydantic
 requests
 gunicorn
-APScheduler

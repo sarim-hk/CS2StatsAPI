@@ -1,19 +1,24 @@
-from flask import Blueprint, jsonify, g, request
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-matches_panel_bp = Blueprint('matches_panel_bp', __name__)
+from app.database import DatabaseConnection, get_db
 
-@matches_panel_bp.route("/matches_panel")
-def matches_panel(query_extension="", params=None):
+router = APIRouter()
+
+
+def fetch_matches(
+    db: DatabaseConnection,
+    query_extension: str = "",
+    params: tuple[Any, ...] | None = None,
+    page: int | None = None,
+) -> list[dict[str, Any]]:
     cursor = None
     try:
-        cursor = g.db.cursor(dictionary=True)
-        
-        # Get page parameter if provided
-        page = request.args.get('page', type=int)
-        
+        cursor = db.cursor(dictionary=True)
         base_query = f"""
-            SELECT 
+            SELECT
                 m.MatchID,
                 m.MapID,
                 m.MatchDate,
@@ -26,64 +31,73 @@ def matches_panel(query_extension="", params=None):
                 tr_w.Side AS WinningSide,
                 tr_w.DeltaELO AS WinningDeltaELO,
                 tr_l.DeltaELO AS LosingDeltaELO
-            FROM 
+            FROM
                 CS2S_Match m
-            JOIN 
+            JOIN
                 CS2S_TeamResult tr_w ON m.MatchID = tr_w.MatchID AND tr_w.Result = 'Win'
-            JOIN 
+            JOIN
                 CS2S_TeamResult tr_l ON m.MatchID = tr_l.MatchID AND tr_l.Result = 'Loss'
-            JOIN 
+            JOIN
                 CS2S_Team t_w ON tr_w.TeamID = t_w.TeamID
-            JOIN 
+            JOIN
                 CS2S_Team t_l ON tr_l.TeamID = t_l.TeamID
             {query_extension}
-            ORDER BY 
+            ORDER BY
                 m.MatchDate DESC
             {" LIMIT %s OFFSET %s" if page is not None else ""}
         """
-        
-        # Add pagination parameters only if page is provided
+
+        query_params = list(params or ())
         if page is not None:
             per_page = 25
-            offset = (page - 1) * per_page
-            if params:
-                params = list(params) + [per_page, offset]
-            else:
-                params = [per_page, offset]
+            query_params.extend([per_page, (page - 1) * per_page])
 
-        cursor.execute(base_query, params or ())
-        matches = cursor.fetchall()
-        return jsonify(matches)
+        cursor.execute(base_query, tuple(query_params))
+        return cursor.fetchall()
 
-    except Error as e:
-        print(f"Error: {e}")
-        return jsonify({"error": "Failed to fetch data."}), 500
-    
+    except Error as exc:
+        print(f"Error: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch data.") from exc
+
     finally:
         if cursor:
             cursor.close()
 
-@matches_panel_bp.route("/matches_panel_by_map")
-def matches_panel_by_map():
-    map_name = request.args.get("map")
 
-    if map_name:
-        query_extension = "WHERE m.MapID = %s"
-        params = (map_name,)
-        return matches_panel(query_extension=query_extension, params=params)
-    else:
-        return jsonify({"error": "Map parameter is required."}), 400
-    
-@matches_panel_bp.route("/matches_panel_by_player_id")
-def matches_panel_by_player_id():
-    player_id = request.args.get("player_id")
+@router.get("/matches_panel")
+def matches_panel(
+    page: int | None = Query(None, ge=1),
+    db: DatabaseConnection = Depends(get_db),
+) -> list[dict[str, Any]]:
+    return fetch_matches(db=db, page=page)
 
-    if player_id:
-        query_extension = """
+
+@router.get("/matches_panel_by_map")
+def matches_panel_by_map(
+    map: str = Query(...),  # noqa: A002 - preserve public query parameter name.
+    page: int | None = Query(None, ge=1),
+    db: DatabaseConnection = Depends(get_db),
+) -> list[dict[str, Any]]:
+    return fetch_matches(
+        db=db,
+        query_extension="WHERE m.MapID = %s",
+        params=(map,),
+        page=page,
+    )
+
+
+@router.get("/matches_panel_by_player_id")
+def matches_panel_by_player_id(
+    player_id: str = Query(...),
+    page: int | None = Query(None, ge=1),
+    db: DatabaseConnection = Depends(get_db),
+) -> list[dict[str, Any]]:
+    return fetch_matches(
+        db=db,
+        query_extension="""
             JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID
             WHERE pm.PlayerID = %s
-        """
-        params = (player_id,)
-        return matches_panel(query_extension=query_extension, params=params)
-    else:
-        return jsonify({"error": "Player ID parameter is required."}), 400
+        """,
+        params=(player_id,),
+        page=page,
+    )

@@ -6,3 +6,4 @@ Caddyfile
 docker-compose.yml
 Dockerfile
 start.sh
+.vscode

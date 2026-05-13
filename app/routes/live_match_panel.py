@@ -1,30 +1,31 @@
-from flask import Blueprint, jsonify, g
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from mysql.connector import Error
 
-live_match_panel_bp = Blueprint("live_match_panel_bp", __name__)
+from app.database import DatabaseConnection, get_db
+
+router = APIRouter()
 
 
-@live_match_panel_bp.route("/live_match_panel")
-def live_match_panel():
+@router.get("/live_match_panel")
+def live_match_panel(db: DatabaseConnection = Depends(get_db)) -> dict[str, Any]:
     cursor = None
     try:
-        cursor = g.db.cursor(dictionary=True)
-        
-        # First get the match status
+        cursor = db.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT TScore, CTScore, BombStatus, MapID, 
-                   UNIX_TIMESTAMP(InsertDate) AS InsertDate 
-            FROM CS2S_LiveStatus 
+            SELECT TScore, CTScore, BombStatus, MapID,
+                   UNIX_TIMESTAMP(InsertDate) AS InsertDate
+            FROM CS2S_LiveStatus
             WHERE StaticID = 1
             """
         )
         match_status = cursor.fetchone()
 
         if match_status is None:
-            return jsonify({"error": "No match found."}), 404
+            raise HTTPException(status_code=404, detail="No match found.")
 
-        # Get T-side players
         cursor.execute(
             """
             SELECT CS2S_LivePlayers.PlayerID, CS2S_PlayerInfo.Username, Kills, Assists, Deaths, ADR, Health, Money
@@ -35,7 +36,6 @@ def live_match_panel():
         )
         t_players = cursor.fetchall()
 
-        # Get CT-side players
         cursor.execute(
             """
             SELECT CS2S_LivePlayers.PlayerID, CS2S_PlayerInfo.Username, Kills, Assists, Deaths, ADR, Health, Money
@@ -46,22 +46,19 @@ def live_match_panel():
         )
         ct_players = cursor.fetchall()
 
-        # Combine all data
-        response = {
+        return {
             "TScore": match_status["TScore"],
             "CTScore": match_status["CTScore"],
             "BombStatus": match_status["BombStatus"],
             "InsertDate": match_status["InsertDate"],
             "MapID": match_status["MapID"],
             "TPlayers": t_players,
-            "CTPlayers": ct_players
+            "CTPlayers": ct_players,
         }
 
-        return jsonify(response)
-
-    except Error as e:
-        print(f"Error: {e}")
-        return jsonify({"error": "Failed to fetch data."}), 500
+    except Error as exc:
+        print(f"Error: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch data.") from exc
 
     finally:
         if cursor:

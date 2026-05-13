@@ -1,40 +1,44 @@
-from flask import Blueprint, jsonify, request, g, current_app
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from mysql.connector import Error
+
+from app.database import DatabaseConnection, get_db
 
 from .player_info_sql import player_info_select_sql
 
-players_panel_bp = Blueprint("players_panel_bp", __name__)
+router = APIRouter()
 
-@players_panel_bp.route("/players_panel")
-def players_panel():
+
+@router.get("/players_panel")
+def players_panel(db: DatabaseConnection = Depends(get_db)) -> list[dict[str, Any]]:
     cursor = None
     try:
-        cursor = g.db.cursor(dictionary=True)
-
-        cursor.execute(f"""
+        cursor = db.cursor(dictionary=True)
+        cursor.execute(
+            f"""
             SELECT {player_info_select_sql("p")}
             FROM CS2S_PlayerInfo p
             JOIN CS2S_Player_Matches pm ON p.PlayerID = pm.PlayerID
             GROUP BY p.PlayerID
             HAVING COUNT(pm.MatchID) > 0
             ORDER BY p.ELO DESC
-        """)
-        
-        players = cursor.fetchall()
-        # Convert PlayerID to string for each player
-        for player in players:
-            player['PlayerID'] = str(player['PlayerID'])
-        
-        if not players:
-            return jsonify({"error": "Player(s) not found."}), 404
-        else:
-            return jsonify(players)
+            """
+        )
 
-    except Error as e:
-        print(f"Error: {e}")
-        return jsonify({"error": "Failed to fetch data."}), 500
-    
+        players = cursor.fetchall()
+        for player in players:
+            player["PlayerID"] = str(player["PlayerID"])
+
+        if not players:
+            raise HTTPException(status_code=404, detail="Player(s) not found.")
+
+        return players
+
+    except Error as exc:
+        print(f"Error: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to fetch data.") from exc
+
     finally:
         if cursor:
             cursor.close()
-

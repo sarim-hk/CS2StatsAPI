@@ -1,21 +1,19 @@
-from flask import Blueprint
+from fastapi import APIRouter
 
-from .live_match_panel import live_match_panel_bp
-from .match_panel import match_panel_bp
-from .matches_panel import matches_panel_bp
-from .opening_rates_panel import opening_rates_bp
-from .player_panel import player_panel_bp
-from .playerelo_panel import playerelo_panel_bp
-from .players_panel import players_panel_bp
-from .playerstats_panel import playerstats_panel_bp
+from .live_match_panel import router as live_match_router
+from .match_panel import router as match_router
+from .matches_panel import router as matches_router
+from .player_panel import router as player_router
+from .playerelo_panel import router as playerelo_router
+from .players_panel import router as players_router
+from .playerstats_panel import router as playerstats_router
 
-bp = Blueprint("main", __name__)
+router = APIRouter()
 
-bp.register_blueprint(players_panel_bp)
-bp.register_blueprint(player_panel_bp)
-bp.register_blueprint(matches_panel_bp)
-bp.register_blueprint(match_panel_bp)
-bp.register_blueprint(live_match_panel_bp)
-bp.register_blueprint(playerstats_panel_bp)
-bp.register_blueprint(playerelo_panel_bp)
-bp.register_blueprint(opening_rates_bp)
+router.include_router(players_router)
+router.include_router(player_router)
+router.include_router(matches_router)
+router.include_router(match_router)
+router.include_router(live_match_router)
+router.include_router(playerstats_router)
+router.include_router(playerelo_router)

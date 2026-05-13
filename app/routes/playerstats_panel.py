@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import DatabaseConnection, get_db
+from app.database import DatabaseConnection, DatabaseCursor, get_db
 
 utility_weapons = ["smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"]
 
@@ -35,7 +35,7 @@ router = APIRouter()
 def playerstats_panel_by_player_id(
     player_id: str = Query(...),
     map_id: str | None = None,
-    range: str = Query("overall"),  # noqa: A002 - preserve public query parameter name.
+    range_filter: str = Query("overall", alias="range"),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:
     player_ids = [pid.strip() for pid in player_id.split(",")]
@@ -44,22 +44,22 @@ def playerstats_panel_by_player_id(
     if not player_ids:
         raise HTTPException(status_code=400, detail="No valid player IDs provided")
 
-    if range not in date_ranges and range not in match_ranges:
+    if range_filter not in date_ranges and range_filter not in match_ranges:
         raise HTTPException(
             status_code=400,
             detail=f"range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}",
         )
 
-    cursor = None
+    cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
-        all_player_stats = {}
+        all_player_stats: dict[str, Any] = {}
 
         for player_id in player_ids:
-            if range in date_ranges:
-                results = get_match_results_date_range(cursor, range, [player_id], map_id)
+            if range_filter in date_ranges:
+                results = get_match_results_date_range(cursor, range_filter, [player_id], map_id)
             else:
-                results = get_match_results_match_range(cursor, range, [player_id], map_id)
+                results = get_match_results_match_range(cursor, range_filter, [player_id], map_id)
 
             if not results:
                 all_player_stats[player_id] = {
@@ -109,8 +109,13 @@ def playerstats_panel_by_player_id(
         if cursor:
             cursor.close()
 
-def get_match_results_match_range(cursor, range, player_ids, map_id=None): 
-    match_range = match_ranges[range]
+def get_match_results_match_range(
+    cursor: DatabaseCursor,
+    range_filter: str,
+    player_ids: list[str],
+    map_id: str | None = None,
+) -> list[dict[str, Any]]:
+    match_range = match_ranges[range_filter]
     
     player_id_placeholders = ", ".join(["%s"] * len(player_ids))
     
@@ -140,9 +145,14 @@ def get_match_results_match_range(cursor, range, player_ids, map_id=None):
     results = cursor.fetchall()
     return results
 
-def get_match_results_date_range(cursor, range, player_ids, map_id=None):
+def get_match_results_date_range(
+    cursor: DatabaseCursor,
+    range_filter: str,
+    player_ids: list[str],
+    map_id: str | None = None,
+) -> list[dict[str, Any]]:
     end_date = datetime.now()
-    start_date = end_date - date_ranges[range]
+    start_date = end_date - date_ranges[range_filter]
     start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
     end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -188,7 +198,11 @@ def get_match_results_date_range(cursor, range, player_ids, map_id=None):
     results = cursor.fetchall()
     return results
 
-def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
+def get_split_round_ids_from_match_ids(
+    cursor: DatabaseCursor,
+    match_ids: list[Any],
+    player_id: str,
+) -> tuple[list[Any], list[Any]]:
     parameterised_match_ids = ", ".join(["%s"] * len(match_ids))
 
     cursor.execute(f"""
@@ -212,12 +226,16 @@ def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
 
     rounds = cursor.fetchall()
 
-    t_rounds = [round["RoundID"] for round in rounds if round["PlayerSide"] == 2]
-    ct_rounds = [round["RoundID"] for round in rounds if round["PlayerSide"] == 3]
+    t_rounds = [match_round["RoundID"] for match_round in rounds if match_round["PlayerSide"] == 2]
+    ct_rounds = [match_round["RoundID"] for match_round in rounds if match_round["PlayerSide"] == 3]
 
     return t_rounds, ct_rounds
 
-def filter_match_ids_by_map(cursor, match_ids, map_id):
+def filter_match_ids_by_map(
+    cursor: DatabaseCursor,
+    match_ids: list[Any],
+    map_id: str,
+) -> list[Any]:
     parameterized_match_ids = ", ".join(["%s"] * len(match_ids))
 
     cursor.execute(f"""
@@ -231,7 +249,13 @@ def filter_match_ids_by_map(cursor, match_ids, map_id):
     filtered_match_ids = [row['MatchID'] for row in result]
     return filtered_match_ids
 
-def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
+def calculate_impact_and_rating(
+    kpr: float,
+    apr: float,
+    dpr: float,
+    kast: float,
+    adr: float,
+) -> tuple[float, float]:
     # Convert inputs to float to ensure float arithmetic
     kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
     impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
@@ -239,7 +263,7 @@ def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     return impact, rating
 
 
-def empty_stats(player_id):
+def empty_stats(player_id: str) -> dict[str, Any]:
     return {
         "PlayerID": player_id,
         "Damage": 0,
@@ -261,7 +285,7 @@ def empty_stats(player_id):
     }
 
 
-def get_stats(cursor, round_ids, player_id):
+def get_stats(cursor: DatabaseCursor, round_ids: list[Any], player_id: str) -> dict[str, Any]:
     if not round_ids:
         return empty_stats(player_id)
 
@@ -377,7 +401,7 @@ def get_stats(cursor, round_ids, player_id):
 
     return stats
 
-def combine_stats(t_stats, ct_stats):
+def combine_stats(t_stats: dict[str, Any], ct_stats: dict[str, Any]) -> dict[str, Any]:
     stats = {
         "PlayerID": t_stats["PlayerID"],
         "Damage": t_stats["Damage"] + ct_stats["Damage"],

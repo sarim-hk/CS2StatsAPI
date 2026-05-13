@@ -2,17 +2,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import DatabaseConnection, get_db
+from app.database import DatabaseConnection, DatabaseCursor, get_db
 
 router = APIRouter()
 
 
-@router.get("/playerelo_panel_bp_by_player_id")
+@router.get("/playerelo_panel_by_player_id")
 def playerelo_panel_by_player_id(
     player_id: str = Query(...),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:
-    cursor = None
+    cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
         cursor.execute(
@@ -49,7 +49,7 @@ def playerelo_panel_by_player_id(
 
         current_elo = results[0]["CurrentELO"]
         calculated_elo = current_elo
-        elo_history = []
+        elo_history: list[dict[str, Any]] = []
 
         for match in results:
             calculated_elo -= match["DeltaELO"]

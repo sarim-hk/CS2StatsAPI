@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, get_db
+from app.database import DatabaseConnection, DatabaseCursor, get_db
 
 from .player_info_sql import player_info_select_sql
 
@@ -15,7 +15,7 @@ def player_panel_by_player_id(
     player_id: str = Query(...),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:
-    cursor = None
+    cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
         cursor.execute(

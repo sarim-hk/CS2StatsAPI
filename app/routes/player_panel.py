@@ -10,8 +10,8 @@ from .player_info_sql import player_info_select_sql
 router = APIRouter()
 
 
-@router.get("/player_panel_by_player_id")
-def player_panel_by_player_id(
+@router.get("/player_panel")
+def player_panel(
     player_id: str = Query(...),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:

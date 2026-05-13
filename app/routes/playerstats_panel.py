@@ -31,8 +31,8 @@ match_ranges = {
 router = APIRouter()
 
 
-@router.get("/playerstats_panel_by_player_id")
-def playerstats_panel_by_player_id(
+@router.get("/playerstats_panel")
+def playerstats_panel(
     player_id: str = Query(...),
     map_id: str | None = None,
     range_filter: str = Query("overall", alias="range"),

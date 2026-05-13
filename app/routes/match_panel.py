@@ -29,8 +29,8 @@ class MatchData:
     player_teams: list[dict[str, Any]]
 
 
-@router.get("/match_panel_by_match_id")
-def match_panel_by_match_id(
+@router.get("/match_panel")
+def match_panel(
     match_id: str = Query(...),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:

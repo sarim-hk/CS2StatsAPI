@@ -10,13 +10,30 @@ router = APIRouter()
 
 def fetch_matches(
     db: DatabaseConnection,
-    query_extension: str = "",
-    params: tuple[Any, ...] | None = None,
+    player_id: str | None = None,
+    map_name: str | None = None,
     page: int | None = None,
 ) -> list[dict[str, Any]]:
     cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
+
+        joins = []
+        filters = []
+        query_params: list[Any] = []
+
+        if player_id is not None:
+            joins.append("JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID")
+            filters.append("pm.PlayerID = %s")
+            query_params.append(player_id)
+
+        if map_name is not None:
+            filters.append("m.MapID = %s")
+            query_params.append(map_name)
+
+        join_sql = "\n".join(joins)
+        where_sql = f"WHERE {' AND '.join(filters)}" if filters else ""
+
         base_query = f"""
             SELECT
                 m.MatchID,
@@ -41,13 +58,13 @@ def fetch_matches(
                 CS2S_Team t_w ON tr_w.TeamID = t_w.TeamID
             JOIN
                 CS2S_Team t_l ON tr_l.TeamID = t_l.TeamID
-            {query_extension}
+            {join_sql}
+            {where_sql}
             ORDER BY
                 m.MatchDate DESC
             {" LIMIT %s OFFSET %s" if page is not None else ""}
         """
 
-        query_params: list[Any] = list(params) if params is not None else []
         if page is not None:
             per_page = 25
             query_params.extend([per_page, (page - 1) * per_page])
@@ -66,38 +83,9 @@ def fetch_matches(
 
 @router.get("/matches_panel")
 def matches_panel(
+    player_id: str | None = None,
+    map_name: str | None = Query(None, alias="map"),
     page: int | None = Query(None, ge=1),
     db: DatabaseConnection = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    return fetch_matches(db=db, page=page)
-
-
-@router.get("/matches_panel_by_map")
-def matches_panel_by_map(
-    map_name: str = Query(..., alias="map"),
-    page: int | None = Query(None, ge=1),
-    db: DatabaseConnection = Depends(get_db),
-) -> list[dict[str, Any]]:
-    return fetch_matches(
-        db=db,
-        query_extension="WHERE m.MapID = %s",
-        params=(map_name,),
-        page=page,
-    )
-
-
-@router.get("/matches_panel_by_player_id")
-def matches_panel_by_player_id(
-    player_id: str = Query(...),
-    page: int | None = Query(None, ge=1),
-    db: DatabaseConnection = Depends(get_db),
-) -> list[dict[str, Any]]:
-    return fetch_matches(
-        db=db,
-        query_extension="""
-            JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID
-            WHERE pm.PlayerID = %s
-        """,
-        params=(player_id,),
-        page=page,
-    )
+    return fetch_matches(db=db, player_id=player_id, map_name=map_name, page=page)

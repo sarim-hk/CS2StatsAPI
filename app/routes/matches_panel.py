@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, get_db
+from app.database import DatabaseConnection, DatabaseCursor, get_db
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ def fetch_matches(
     params: tuple[Any, ...] | None = None,
     page: int | None = None,
 ) -> list[dict[str, Any]]:
-    cursor = None
+    cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
         base_query = f"""
@@ -47,7 +47,7 @@ def fetch_matches(
             {" LIMIT %s OFFSET %s" if page is not None else ""}
         """
 
-        query_params = list(params or ())
+        query_params: list[Any] = list(params) if params is not None else []
         if page is not None:
             per_page = 25
             query_params.extend([per_page, (page - 1) * per_page])
@@ -74,14 +74,14 @@ def matches_panel(
 
 @router.get("/matches_panel_by_map")
 def matches_panel_by_map(
-    map: str = Query(...),  # noqa: A002 - preserve public query parameter name.
+    map_name: str = Query(..., alias="map"),
     page: int | None = Query(None, ge=1),
     db: DatabaseConnection = Depends(get_db),
 ) -> list[dict[str, Any]]:
     return fetch_matches(
         db=db,
         query_extension="WHERE m.MapID = %s",
-        params=(map,),
+        params=(map_name,),
         page=page,
     )
 

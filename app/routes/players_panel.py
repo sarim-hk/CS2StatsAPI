@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, get_db
+from app.database import DatabaseConnection, DatabaseCursor, get_db
 
 from .player_info_sql import player_info_select_sql
 
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/players_panel")
 def players_panel(db: DatabaseConnection = Depends(get_db)) -> list[dict[str, Any]]:
-    cursor = None
+    cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
         cursor.execute(

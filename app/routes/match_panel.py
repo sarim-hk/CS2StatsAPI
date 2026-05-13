@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, get_db
+from app.database import DatabaseConnection, DatabaseCursor, get_db
 
 from .player_info_sql import avatar_url_sql
 
@@ -34,7 +34,7 @@ def match_panel_by_match_id(
     match_id: str = Query(...),
     db: DatabaseConnection = Depends(get_db),
 ) -> dict[str, Any]:
-    cursor = None
+    cursor: DatabaseCursor | None = None
     try:
         cursor = db.cursor(dictionary=True)
 
@@ -198,7 +198,7 @@ def build_teams(
     return teams
 
 
-def fetch_match_data(cursor, match_id: str) -> MatchData | None:
+def fetch_match_data(cursor: DatabaseCursor, match_id: str) -> MatchData | None:
     cursor.execute("SELECT * FROM CS2S_Match WHERE MatchID = %s", (match_id,))
     match = cursor.fetchone()
     if not match:
@@ -359,7 +359,13 @@ def _add_damage(stats: dict[str, Any], amount: int, is_utility: bool) -> None:
         stats["UtilityDamage"] += amount
 
 
-def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
+def calculate_impact_and_rating(
+    kpr: float,
+    apr: float,
+    dpr: float,
+    kast: float,
+    adr: float,
+) -> tuple[float, float]:
     kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
     impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
     rating = (

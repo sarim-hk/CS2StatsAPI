@@ -5,7 +5,7 @@ from mysql.connector import Error
 
 from app.database import DatabaseConnection, DatabaseCursor, get_db
 
-from .player_info_sql import player_info_select_sql
+from .utils.player_info_sql import player_info_select_sql
 
 router = APIRouter()
 

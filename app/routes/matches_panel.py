@@ -61,7 +61,7 @@ def fetch_matches(
             {join_sql}
             {where_sql}
             ORDER BY
-                m.MatchDate DESC
+                m.MatchID DESC
             {" LIMIT %s OFFSET %s" if page is not None else ""}
         """
 

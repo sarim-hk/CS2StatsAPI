@@ -3,6 +3,7 @@
     "MySQLDatabase": "",
     "MySQLUsername": "",
     "MySQLPassword": "",
+    "UploadAuthKey": ""
     "_readme": "Rename this file to `config.json` and input details above ^^"
 }
 

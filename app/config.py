@@ -11,6 +11,7 @@ class Settings(BaseModel):
     mysql_database: str = Field(alias="MySQLDatabase")
     mysql_username: str = Field(alias="MySQLUsername")
     mysql_password: str = Field(alias="MySQLPassword")
+    api_auth_key: str = Field(alias="APIAuthKey")
 
 
 def _config_path() -> Path:

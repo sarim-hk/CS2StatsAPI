@@ -132,10 +132,8 @@ def get_match_results_match_range(cursor, range_filter, player_ids, map_id=None)
     return results
 
 def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
-    end_date = datetime.now()
-    start_date = end_date - date_ranges[range_filter]
+    start_date = datetime.now() - date_ranges[range_filter]
     start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-    end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
     
     # Prepare placeholders for player IDs
     player_id_placeholders = ", ".join(["%s"] * len(player_ids))
@@ -144,8 +142,7 @@ def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
     WITH DateRangeMatches AS (
         SELECT MatchID, MatchDate
         FROM CS2S_Match
-        WHERE (%s IS NULL OR MatchDate >= %s) 
-          AND (%s IS NULL OR MatchDate <= %s)
+        WHERE MatchDate >= %s
           {'' if map_id is None else 'AND MapID = %s'}
     )
     SELECT 
@@ -163,15 +160,13 @@ def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
     # Prepare parameters
     if map_id is not None:
         params = (
-            start_date_str, start_date_str, 
-            end_date_str, end_date_str,
+            start_date_str,
             map_id,
             *player_ids, *player_ids
         )
     else:
         params = (
-            start_date_str, start_date_str, 
-            end_date_str, end_date_str,
+            start_date_str,
             *player_ids, *player_ids
         )
     

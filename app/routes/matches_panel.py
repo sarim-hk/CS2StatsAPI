@@ -31,7 +31,7 @@ def fetch_matches(db, player_id=None, map_name=None, page=None):
             SELECT
                 m.MatchID,
                 m.MapID,
-                m.MatchDate,
+                DATE_FORMAT(m.MatchDate, '%a, %d %b %Y %H:%i:%s GMT') AS MatchDate,
                 tr_w.TeamID AS WinningTeamID,
                 t_w.Name AS WinningTeamName,
                 tr_l.TeamID AS LosingTeamID,

@@ -1,26 +1,19 @@
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, DatabaseCursor, get_db
+from app.database import get_db
 
 router = APIRouter()
 
 
-def fetch_matches(
-    db: DatabaseConnection,
-    player_id: str | None = None,
-    map_name: str | None = None,
-    page: int | None = None,
-) -> list[dict[str, Any]]:
-    cursor: DatabaseCursor | None = None
+def fetch_matches(db, player_id=None, map_name=None, page=None):
+    cursor = None
     try:
         cursor = db.cursor(dictionary=True)
 
         joins = []
         filters = []
-        query_params: list[Any] = []
+        query_params = []
 
         if player_id is not None:
             joins.append("JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID")
@@ -82,10 +75,5 @@ def fetch_matches(
 
 
 @router.get("/matches_panel")
-def matches_panel(
-    player_id: str | None = None,
-    map_name: str | None = Query(None, alias="map"),
-    page: int | None = Query(None, ge=1),
-    db: DatabaseConnection = Depends(get_db),
-) -> list[dict[str, Any]]:
+def matches_panel(player_id = None, map_name = Query(None, alias="map"), page = Query(None, ge=1), db=Depends(get_db)):
     return fetch_matches(db=db, player_id=player_id, map_name=map_name, page=page)

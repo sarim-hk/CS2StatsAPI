@@ -1,8 +1,8 @@
-def avatar_hash_base_sql(alias: str = "p") -> str:
+def avatar_hash_base_sql(alias="p"):
     return f"REPLACE({alias}.AvatarHash, '.jpg', '')"
 
 
-def avatar_url_sql(alias: str = "p", size: str = "") -> str:
+def avatar_url_sql(alias="p", size=""):
     suffix = f"_{size}" if size else ""
     return (
         "CONCAT("
@@ -13,7 +13,7 @@ def avatar_url_sql(alias: str = "p", size: str = "") -> str:
     )
 
 
-def player_info_select_sql(alias: str = "p") -> str:
+def player_info_select_sql(alias="p"):
     return f"""
         {alias}.PlayerID,
         {alias}.ELO,

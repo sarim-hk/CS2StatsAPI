@@ -1,18 +1,13 @@
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import DatabaseConnection, DatabaseCursor, get_db
+from app.database import get_db
 
 router = APIRouter()
 
 
 @router.get("/playerelo_panel")
-def playerelo_panel(
-    player_id: str = Query(...),
-    db: DatabaseConnection = Depends(get_db),
-) -> dict[str, Any]:
-    cursor: DatabaseCursor | None = None
+def playerelo_panel(player_id = Query(...), db = Depends(get_db)):
+    cursor = None
     try:
         cursor = db.cursor(dictionary=True)
         cursor.execute(
@@ -49,7 +44,7 @@ def playerelo_panel(
 
         current_elo = results[0]["CurrentELO"]
         calculated_elo = current_elo
-        elo_history: list[dict[str, Any]] = []
+        elo_history = []
 
         for match in results:
             calculated_elo -= match["DeltaELO"]

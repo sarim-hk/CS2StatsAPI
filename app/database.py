@@ -1,13 +1,8 @@
-from collections.abc import Generator, Sequence
-from typing import Any, Protocol, cast
-
+from contextlib import contextmanager
 import mysql.connector
-from mysql.connector.abstracts import MySQLConnectionAbstract
-from mysql.connector.pooling import PooledMySQLConnection
 
-from .config import Settings, get_settings
+from .config import get_settings
 
-QueryParams = Sequence[Any] | dict[str, Any] | None
 
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS CS2S_Map (
@@ -217,35 +212,17 @@ CREATE TABLE IF NOT EXISTS CS2S_PlayerOfTheWeek (
 );
 """
 
-
-class DatabaseCursor(Protocol):
-    def execute(self, operation: str, params: QueryParams = None) -> Any: ...
-    def fetchone(self) -> dict[str, Any] | None: ...
-    def fetchall(self) -> list[dict[str, Any]]: ...
-    def close(self) -> Any: ...
-    def __enter__(self) -> "DatabaseCursor": ...
-    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None: ...
-
-
-class DatabaseConnection(Protocol):
-    def cursor(self, *args: Any, **kwargs: Any) -> DatabaseCursor: ...
-    def commit(self) -> Any: ...
-    def close(self) -> Any: ...
-
-
-def create_db_connection(settings: Settings) -> DatabaseConnection:
-    connection: PooledMySQLConnection | MySQLConnectionAbstract = mysql.connector.connect(
+def create_db_connection(settings):
+    return mysql.connector.connect(
         host=settings.mysql_server,
         database=settings.mysql_database,
         user=settings.mysql_username,
         password=settings.mysql_password,
     )
-    return cast(DatabaseConnection, connection)
 
-
-def create_tables(settings: Settings | None = None) -> None:
+def create_tables(settings=None):
     db = create_db_connection(settings or get_settings())
-    cursor: DatabaseCursor | None = None
+    cursor = None
     try:
         cursor = db.cursor()
         for statement in CREATE_TABLES_SQL.split(";"):
@@ -258,8 +235,20 @@ def create_tables(settings: Settings | None = None) -> None:
             cursor.close()
         db.close()
 
+@contextmanager
+def transaction(settings=None):
+    db = create_db_connection(settings or get_settings())
+    try:
+        db.start_transaction()
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
-def get_db() -> Generator[DatabaseConnection, Any, None]:
+def get_db():
     db = create_db_connection(get_settings())
     try:
         yield db

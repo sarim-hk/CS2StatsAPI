@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,12 +8,12 @@ from app.routes import router
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app):
     create_tables()
     yield
 
 
-def create_app() -> FastAPI:
+def create_app():
     app = FastAPI(title="CS2Stats API", lifespan=lifespan)
 
     app.add_middleware(

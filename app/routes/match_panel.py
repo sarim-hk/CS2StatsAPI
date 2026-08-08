@@ -1,10 +1,7 @@
-from dataclasses import dataclass
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, DatabaseCursor, get_db
+from app.database import get_db
 
 from .utils.player_info_sql import avatar_url_sql
 
@@ -14,27 +11,40 @@ UTILITY_WEAPONS = {"smokegrenade", "molotov", "inferno", "hegrenade", "flashbang
 SIDES = ("Overall", "Terrorist", "CounterTerrorist")
 
 
-@dataclass
 class MatchData:
-    match: dict[str, Any]
-    players_info: dict[str, dict[str, Any]]
-    team_results: list[dict[str, Any]]
-    rounds: list[dict[str, Any]]
-    deaths: list[dict[str, Any]]
-    clutches: list[dict[str, Any]]
-    duels: list[dict[str, Any]]
-    kast_stats: list[dict[str, Any]]
-    blinds: list[dict[str, Any]]
-    damage_stats: list[dict[str, Any]]
-    player_teams: list[dict[str, Any]]
+    def __init__(
+        self,
+        match,
+        players_info,
+        team_results,
+        rounds,
+        deaths,
+        clutches,
+        duels,
+        kast_stats,
+        blinds,
+        damage_stats,
+        player_teams,
+    ):
+        self.match = match
+        self.players_info = players_info
+        self.team_results = team_results
+        self.rounds = rounds
+        self.deaths = deaths
+        self.clutches = clutches
+        self.duels = duels
+        self.kast_stats = kast_stats
+        self.blinds = blinds
+        self.damage_stats = damage_stats
+        self.player_teams = player_teams
 
 
 @router.get("/match_panel")
 def match_panel(
     match_id: str = Query(...),
-    db: DatabaseConnection = Depends(get_db),
-) -> dict[str, Any]:
-    cursor: DatabaseCursor | None = None
+    db=Depends(get_db),
+):
+    cursor = None
     try:
         cursor = db.cursor(dictionary=True)
 
@@ -53,7 +63,7 @@ def match_panel(
             cursor.close()
 
 
-def build_match_response(match_data: MatchData) -> dict[str, Any]:
+def build_match_response(match_data):
     players_stats = aggregate_player_stats(match_data)
     apply_player_info_and_derived_stats(players_stats, match_data)
 
@@ -66,8 +76,8 @@ def build_match_response(match_data: MatchData) -> dict[str, Any]:
     return match_data.match
 
 
-def aggregate_player_stats(match_data: MatchData) -> dict[str, dict[str, Any]]:
-    players_stats: dict[str, dict[str, Any]] = {}
+def aggregate_player_stats(match_data):
+    players_stats = {}
 
     for kast in match_data.kast_stats:
         player_id = kast["PlayerID"]
@@ -138,9 +148,9 @@ def aggregate_player_stats(match_data: MatchData) -> dict[str, dict[str, Any]]:
 
 
 def apply_player_info_and_derived_stats(
-    players_stats: dict[str, dict[str, Any]],
-    match_data: MatchData,
-) -> None:
+    players_stats,
+    match_data,
+):
     player_side_rounds = calculate_player_side_rounds(match_data.rounds, match_data.player_teams)
 
     for player_id, stats in players_stats.items():
@@ -158,10 +168,10 @@ def apply_player_info_and_derived_stats(
 
 
 def calculate_player_side_rounds(
-    rounds: list[dict[str, Any]],
-    player_teams: list[dict[str, Any]],
-) -> dict[str, dict[str, int]]:
-    player_side_rounds: dict[str, dict[str, int]] = {}
+    rounds,
+    player_teams,
+):
+    player_side_rounds = {}
     player_team_map = {player["PlayerID"]: player["TeamID"] for player in player_teams}
 
     for match_round in rounds:
@@ -177,10 +187,10 @@ def calculate_player_side_rounds(
 
 
 def build_teams(
-    team_results: list[dict[str, Any]],
-    player_teams: list[dict[str, Any]],
-    players_stats: dict[str, dict[str, Any]],
-) -> dict[Any, dict[str, Any]]:
+    team_results,
+    player_teams,
+    players_stats,
+):
     teams = {
         team_result["TeamID"]: {
             **team_result,
@@ -198,7 +208,7 @@ def build_teams(
     return teams
 
 
-def fetch_match_data(cursor: DatabaseCursor, match_id: str) -> MatchData | None:
+def fetch_match_data(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Match WHERE MatchID = %s", (match_id,))
     match = cursor.fetchone()
     if not match:
@@ -300,7 +310,7 @@ def fetch_match_data(cursor: DatabaseCursor, match_id: str) -> MatchData | None:
     )
 
 
-def _create_empty_playerstat(player_id: str) -> dict[str, Any]:
+def _create_empty_playerstat(player_id):
     return {
         "PlayerID": player_id,
         "KAST": 0,
@@ -315,7 +325,7 @@ def _create_empty_playerstat(player_id: str) -> dict[str, Any]:
     }
 
 
-def _create_empty_side_stats(player_id: str) -> dict[str, dict[str, Any]]:
+def _create_empty_side_stats(player_id):
     return {
         "Overall": _create_empty_playerstat(player_id),
         "Terrorist": _create_empty_playerstat(player_id),
@@ -324,15 +334,15 @@ def _create_empty_side_stats(player_id: str) -> dict[str, dict[str, Any]]:
 
 
 def _get_or_create_player_stats(
-    players_stats: dict[str, dict[str, Any]],
-    player_id: str,
-) -> dict[str, Any]:
+    players_stats,
+    player_id,
+):
     if player_id not in players_stats:
         players_stats[player_id] = _create_empty_side_stats(player_id)
     return players_stats[player_id]
 
 
-def _side_stats(stats: dict[str, Any], side: int | None) -> dict[str, Any] | None:
+def _side_stats(stats, side):
     if side == 2:
         return stats["Terrorist"]
     if side == 3:
@@ -340,7 +350,7 @@ def _side_stats(stats: dict[str, Any], side: int | None) -> dict[str, Any] | Non
     return None
 
 
-def opposing_side(victim_side: int | None) -> int | None:
+def opposing_side(victim_side):
     if victim_side == 2:
         return 3
     if victim_side == 3:
@@ -348,24 +358,24 @@ def opposing_side(victim_side: int | None) -> int | None:
     return None
 
 
-def _add_blind(stats: dict[str, Any], duration: float) -> None:
+def _add_blind(stats, duration):
     stats["Blinds"]["Count"] += 1
     stats["Blinds"]["TotalDuration"] += duration
 
 
-def _add_damage(stats: dict[str, Any], amount: int, is_utility: bool) -> None:
+def _add_damage(stats, amount, is_utility):
     stats["Damage"] += amount
     if is_utility:
         stats["UtilityDamage"] += amount
 
 
 def calculate_impact_and_rating(
-    kpr: float,
-    apr: float,
-    dpr: float,
-    kast: float,
-    adr: float,
-) -> tuple[float, float]:
+    kpr,
+    apr,
+    dpr,
+    kast,
+    adr,
+):
     kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
     impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
     rating = (
@@ -379,9 +389,9 @@ def calculate_impact_and_rating(
     return impact, rating
 
 
-def _calculate_derived_stats(stats: dict[str, Any], total_rounds: int) -> None:
+def _calculate_derived_stats(stats, total_rounds):
     if total_rounds > 0:
-        total_rounds_fl: float = float(total_rounds)
+        total_rounds_fl = float(total_rounds)
         stats["Rounds"] = total_rounds
         stats["KAST"] = (float(stats["KAST"]) / total_rounds_fl) * 100.0
         stats["KPR"] = float(stats["Kills"]) / total_rounds_fl

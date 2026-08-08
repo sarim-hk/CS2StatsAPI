@@ -1,22 +1,17 @@
 import gzip
 import json
 import secrets
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.config import Settings, get_settings
+from app.database import transaction
 
 router = APIRouter()
 
-
 @router.post("/upload_match")
-async def upload_match(
-    request: Request,
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    validate_authorization(request, settings.api_auth_key)
+async def upload_match(request, settings = Depends(get_settings)):
 
+    validate_authorization(request, settings.api_auth_key)
     body = await request.body()
 
     if request.headers.get("content-encoding", "").lower() == "gzip":
@@ -32,13 +27,17 @@ async def upload_match(
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
 
+    with transaction() as db:
+        cursor = db.cursor()
+        cursor.execute()
+
     return {
         "success": True,
         "message": "Match JSON received.",
         "type": type(match_json).__name__,
     }
 
-def validate_authorization(request: Request, expected_auth_key: str) -> None:
+def validate_authorization(request, expected_auth_key):
     if not expected_auth_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

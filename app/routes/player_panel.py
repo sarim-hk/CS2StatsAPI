@@ -1,9 +1,7 @@
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import DatabaseConnection, DatabaseCursor, get_db
+from app.database import get_db
 
 from .utils.player_info_sql import player_info_select_sql
 
@@ -11,11 +9,8 @@ router = APIRouter()
 
 
 @router.get("/player_panel")
-def player_panel(
-    player_id: str = Query(...),
-    db: DatabaseConnection = Depends(get_db),
-) -> dict[str, Any]:
-    cursor: DatabaseCursor | None = None
+def player_panel(player_id = Query(...), db=Depends(get_db)):
+    cursor = None
     try:
         cursor = db.cursor(dictionary=True)
         cursor.execute(

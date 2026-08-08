@@ -1,10 +1,8 @@
 from datetime import datetime, timedelta
 import traceback
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import DatabaseConnection, DatabaseCursor, get_db
+from app.database import get_db
 
 utility_weapons = ["smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"]
 
@@ -30,14 +28,8 @@ match_ranges = {
 
 router = APIRouter()
 
-
 @router.get("/playerstats_panel")
-def playerstats_panel(
-    player_id: str = Query(...),
-    map_id: str | None = None,
-    range_filter: str = Query("overall", alias="range"),
-    db: DatabaseConnection = Depends(get_db),
-) -> dict[str, Any]:
+def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Query("overall", alias="range"), db=Depends(get_db)):
     player_ids = [pid.strip() for pid in player_id.split(",")]
     player_ids = [pid for pid in player_ids if pid]
 
@@ -50,10 +42,10 @@ def playerstats_panel(
             detail=f"range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}",
         )
 
-    cursor: DatabaseCursor | None = None
+    cursor = None
     try:
         cursor = db.cursor(dictionary=True)
-        all_player_stats: dict[str, Any] = {}
+        all_player_stats = {}
 
         for player_id in player_ids:
             if range_filter in date_ranges:
@@ -109,14 +101,8 @@ def playerstats_panel(
         if cursor:
             cursor.close()
 
-def get_match_results_match_range(
-    cursor: DatabaseCursor,
-    range_filter: str,
-    player_ids: list[str],
-    map_id: str | None = None,
-) -> list[dict[str, Any]]:
+def get_match_results_match_range(cursor, range_filter, player_ids, map_id=None):
     match_range = match_ranges[range_filter]
-    
     player_id_placeholders = ", ".join(["%s"] * len(player_ids))
     
     query = f"""
@@ -145,12 +131,7 @@ def get_match_results_match_range(
     results = cursor.fetchall()
     return results
 
-def get_match_results_date_range(
-    cursor: DatabaseCursor,
-    range_filter: str,
-    player_ids: list[str],
-    map_id: str | None = None,
-) -> list[dict[str, Any]]:
+def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
     end_date = datetime.now()
     start_date = end_date - date_ranges[range_filter]
     start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
@@ -198,11 +179,7 @@ def get_match_results_date_range(
     results = cursor.fetchall()
     return results
 
-def get_split_round_ids_from_match_ids(
-    cursor: DatabaseCursor,
-    match_ids: list[Any],
-    player_id: str,
-) -> tuple[list[Any], list[Any]]:
+def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
     parameterised_match_ids = ", ".join(["%s"] * len(match_ids))
 
     cursor.execute(f"""
@@ -231,11 +208,7 @@ def get_split_round_ids_from_match_ids(
 
     return t_rounds, ct_rounds
 
-def filter_match_ids_by_map(
-    cursor: DatabaseCursor,
-    match_ids: list[Any],
-    map_id: str,
-) -> list[Any]:
+def filter_match_ids_by_map(cursor, match_ids, map_id):
     parameterized_match_ids = ", ".join(["%s"] * len(match_ids))
 
     cursor.execute(f"""
@@ -249,21 +222,14 @@ def filter_match_ids_by_map(
     filtered_match_ids = [row['MatchID'] for row in result]
     return filtered_match_ids
 
-def calculate_impact_and_rating(
-    kpr: float,
-    apr: float,
-    dpr: float,
-    kast: float,
-    adr: float,
-) -> tuple[float, float]:
+def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     # Convert inputs to float to ensure float arithmetic
     kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
     impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
     rating = ((0.0073 * kast) + (0.3591 * kpr) + (-0.5329 * dpr) + (0.2372 * impact) + (0.0032 * adr) + 0.1587) or 0.0
     return impact, rating
 
-
-def empty_stats(player_id: str) -> dict[str, Any]:
+def empty_stats(player_id):
     return {
         "PlayerID": player_id,
         "Damage": 0,
@@ -284,8 +250,7 @@ def empty_stats(player_id: str) -> dict[str, Any]:
         "Rating": 0,
     }
 
-
-def get_stats(cursor: DatabaseCursor, round_ids: list[Any], player_id: str) -> dict[str, Any]:
+def get_stats(cursor, round_ids, player_id):
     if not round_ids:
         return empty_stats(player_id)
 
@@ -401,7 +366,7 @@ def get_stats(cursor: DatabaseCursor, round_ids: list[Any], player_id: str) -> d
 
     return stats
 
-def combine_stats(t_stats: dict[str, Any], ct_stats: dict[str, Any]) -> dict[str, Any]:
+def combine_stats(t_stats, ct_stats):
     stats = {
         "PlayerID": t_stats["PlayerID"],
         "Damage": t_stats["Damage"] + ct_stats["Damage"],

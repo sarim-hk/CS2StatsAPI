@@ -1,17 +1,13 @@
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.database import create_tables
 from app.routes import router
-
 
 @asynccontextmanager
 async def lifespan(app):
     create_tables()
     yield
-
 
 def create_app():
     app = FastAPI(title="CS2Stats API", lifespan=lifespan)
@@ -25,7 +21,6 @@ def create_app():
     )
 
     app.include_router(router)
-
     return app
 
 

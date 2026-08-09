@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
-
 from app.database import fetch_matches, get_db
 
 router = APIRouter()
-
 
 @router.get("/matches_panel")
 def matches_panel(player_id = None, map_name = Query(None, alias="map"), page = Query(None, ge=1), db=Depends(get_db)):

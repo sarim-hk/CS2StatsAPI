@@ -3,7 +3,6 @@ from functools import lru_cache
 from pathlib import Path
 from pydantic import BaseModel, Field
 
-
 class Settings(BaseModel):
     mysql_server: str = Field(alias="MySQLServer")
     mysql_database: str = Field(alias="MySQLDatabase")
@@ -12,10 +11,8 @@ class Settings(BaseModel):
     api_auth_key: str = Field(alias="APIAuthKey")
     steam_api_auth_key: str = Field(alias="SteamAPIAuthKey")
 
-
 def _config_path():
     return Path(__file__).resolve().parent.parent / "instance" / "config.json"
-
 
 @lru_cache
 def get_settings():

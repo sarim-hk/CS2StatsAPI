@@ -112,12 +112,10 @@ def get_match_results_match_range(cursor, range_filter, player_ids, map_id=None)
     match_range = match_ranges[range_filter]
     return db_fetch_match_results_match_range(cursor, match_range, player_ids, map_id)
 
-
 def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
     start_date = datetime.now() - date_ranges[range_filter]
     start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
     return db_fetch_match_results_date_range(cursor, start_date_str, player_ids, map_id)
-
 
 def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
     rounds = fetch_round_sides_for_player_matches(cursor, match_ids, player_id)
@@ -127,11 +125,9 @@ def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
 
     return t_rounds, ct_rounds
 
-
 def filter_match_ids_by_map(cursor, match_ids, map_id):
     result = fetch_match_ids_for_map(cursor, match_ids, map_id)
     return [row["MatchID"] for row in result]
-
 
 def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     # Convert inputs to float to ensure float arithmetic
@@ -208,7 +204,6 @@ def get_stats(cursor, round_ids, player_id):
     stats["Rating"] = round(stats["Rating"], 2) or 0
 
     return stats
-
 
 def combine_stats(t_stats, ct_stats):
     stats = {

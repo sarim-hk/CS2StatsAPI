@@ -3,7 +3,6 @@ import json
 import math
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-
 from app.config import Settings, get_settings
 from app.database import (
     fetch_team_average_elo,

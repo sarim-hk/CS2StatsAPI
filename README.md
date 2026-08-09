@@ -19,7 +19,7 @@
 * Automatic demo recording
 * Built in ELO system to rank players
 * Live match display
-* In-depth stat tracking, per match, per round:
+* In-depth stat tracking:
   *  ELO
   *  Kills, Assists, Deaths
   *  Utility Damage, Total Damage
@@ -39,9 +39,11 @@
 ## Installation
 * Clone the repository
 * Rename the `config_template.json` within `/instance/` to `config.json`
-* Fill out MySQL Server details within the newly-renamed `config.json`
+* Fill out the config with:
+  * MySQL details
+  * API authentication key (should match the auth key set in the plugin config on the game-server)
+  * [Steam API key](https://steamcommunity.com/dev/apikey)
+* Fill out MySQL Server details, API auth key (this should be match),  within the newly-renamed `config.json`
 * Install dependencies: `pip install -r requirements.txt`
-* Run the FastAPI app locally: `python run.py`
-* For production, serve `app.main:app` with an ASGI server such as Uvicorn or Gunicorn with Uvicorn workers.
-* Host the scheduler as you wish - I made a [service](https://gist.github.com/sarim-hk/b75d5d5fe427175baaa2e0f33e1ae468) for this
+* For production, serve `run:app` with an ASGI server such as Uvicorn or Gunicorn.
 * Done!

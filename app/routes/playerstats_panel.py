@@ -94,10 +94,9 @@ def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Quer
     except Exception as e:
         if isinstance(e, HTTPException):
             raise
+
         error_message = str(e)
         error_traceback = traceback.format_exc()
-
-        print(error_traceback)
 
         raise HTTPException(
             status_code=500,

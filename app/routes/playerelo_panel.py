@@ -33,5 +33,6 @@ def playerelo_panel(player_id = Query(...), db = Depends(get_db)):
 
     except HTTPException:
         raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e

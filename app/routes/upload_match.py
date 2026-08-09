@@ -50,9 +50,9 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
         try:
             body = gzip.decompress(body)
             print(f"[upload_match] Gzip decompressed. Bytes={len(body)}")
-        except gzip.BadGzipFile as exc:
+        except gzip.BadGzipFile as e:
             print("[upload_match] Invalid gzip payload.")
-            raise HTTPException(status_code=400, detail="Invalid gzip payload.") from exc
+            raise HTTPException(status_code=400, detail="Invalid gzip payload.") from e
 
     try:
         match_json = json.loads(body.decode("utf-8"))
@@ -61,12 +61,12 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
             f"Map={match_json.get('MapName')}, Teams={len(match_json.get('Teams', []))}, "
             f"Rounds={len(match_json.get('Rounds', []))}"
         )
-    except UnicodeDecodeError as exc:
+    except UnicodeDecodeError as e:
         print("[upload_match] Request body was not valid UTF-8.")
-        raise HTTPException(status_code=400, detail="Request body must be UTF-8 encoded.") from exc
-    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Request body must be UTF-8 encoded.") from e
+    except json.JSONDecodeError as e:
         print("[upload_match] Request body was not valid JSON.")
-        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from e
 
     with transaction() as db:
         cursor = db.cursor()
@@ -90,20 +90,20 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 for player_id in team["PlayerIDs"]:
                     try:
                         insert_team_player(cursor, team["TeamID"], player_id)
-                    except Exception as exc:
+                    except Exception as e:
                         print(
                             "[upload_match] Team player insert failed. "
-                            f"TeamID={team['TeamID']}, PlayerID={player_id}, Error={exc}"
+                            f"TeamID={team['TeamID']}, PlayerID={player_id}, Error={e}"
                         )
                         raise
                     print(f"[upload_match] Team player inserted/confirmed. TeamID={team['TeamID']}, PlayerID={player_id}")
 
                     try:
                         insert_player_match(cursor, player_id, match_id)
-                    except Exception as exc:
+                    except Exception as e:
                         print(
                             "[upload_match] Player match insert failed. "
-                            f"MatchID={match_id}, PlayerID={player_id}, Error={exc}"
+                            f"MatchID={match_id}, PlayerID={player_id}, Error={e}"
                         )
                         raise
                     print(f"[upload_match] Player match inserted. MatchID={match_id}, PlayerID={player_id}")
@@ -122,8 +122,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                     clutch = match_round["ClutchEvent"]
                     try:
                         insert_clutch(cursor, round_id, match_id, clutch)
-                    except Exception as exc:
-                        print_insert_failure("Clutch", match_id, round_index, round_id, clutch, exc)
+                    except Exception as e:
+                        print_insert_failure("Clutch", match_id, round_index, round_id, clutch, e)
                         raise
                     print(f"[upload_match] Clutch inserted. RoundID={round_id}, {format_player_ids(clutch)}")
                 else:
@@ -133,8 +133,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                     duel = match_round["DuelEvent"]
                     try:
                         insert_duel(cursor, round_id, match_id, duel)
-                    except Exception as exc:
-                        print_insert_failure("Duel", match_id, round_index, round_id, duel, exc)
+                    except Exception as e:
+                        print_insert_failure("Duel", match_id, round_index, round_id, duel, e)
                         raise
                     print(f"[upload_match] Duel inserted. RoundID={round_id}, {format_player_ids(duel)}")
                 else:
@@ -143,8 +143,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 for hurt in match_round["HurtEvents"]:
                     try:
                         insert_hurt(cursor, round_id, match_id, hurt)
-                    except Exception as exc:
-                        print_insert_failure("Hurt", match_id, round_index, round_id, hurt, exc)
+                    except Exception as e:
+                        print_insert_failure("Hurt", match_id, round_index, round_id, hurt, e)
                         raise
                 print(
                     "[upload_match] Hurt events inserted. "
@@ -154,8 +154,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 for death in match_round["DeathEvents"]:
                     try:
                         insert_death(cursor, round_id, match_id, death)
-                    except Exception as exc:
-                        print_insert_failure("Death", match_id, round_index, round_id, death, exc)
+                    except Exception as e:
+                        print_insert_failure("Death", match_id, round_index, round_id, death, e)
                         raise
                 print(
                     "[upload_match] Death events inserted. "
@@ -165,8 +165,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 for blind in match_round["BlindEvents"]:
                     try:
                         insert_blind(cursor, round_id, match_id, blind)
-                    except Exception as exc:
-                        print_insert_failure("Blind", match_id, round_index, round_id, blind, exc)
+                    except Exception as e:
+                        print_insert_failure("Blind", match_id, round_index, round_id, blind, e)
                         raise
                 print(
                     "[upload_match] Blind events inserted. "
@@ -176,8 +176,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 for grenade in match_round["GrenadeEvents"]:
                     try:
                         insert_grenade(cursor, round_id, match_id, grenade)
-                    except Exception as exc:
-                        print_insert_failure("Grenade", match_id, round_index, round_id, grenade, exc)
+                    except Exception as e:
+                        print_insert_failure("Grenade", match_id, round_index, round_id, grenade, e)
                         raise
                 print(
                     "[upload_match] Grenade events inserted. "
@@ -187,8 +187,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 for kast in match_round["KASTEvents"]:
                     try:
                         insert_kast(cursor, round_id, match_id, kast)
-                    except Exception as exc:
-                        print_insert_failure("KAST", match_id, round_index, round_id, kast, exc)
+                    except Exception as e:
+                        print_insert_failure("KAST", match_id, round_index, round_id, kast, e)
                         raise
                 print(
                     "[upload_match] KAST events inserted. "
@@ -232,8 +232,8 @@ def upload_match(request: Request, settings: Settings = Depends(get_settings)):
                 )
 
             print(f"[upload_match] Database writes finished. MatchID={match_id}. Committing transaction.")
-        except Exception as exc:
-            print(f"[upload_match] Error while importing match. MatchID={locals().get('match_id', 'not-created')}, Error={exc}")
+        except Exception as e:
+            print(f"[upload_match] Error while importing match. MatchID={locals().get('match_id', 'not-created')}, Error={e}")
             raise
         finally:
             cursor.close()
@@ -277,11 +277,11 @@ def format_events_player_ids(events):
         player_ids.extend(f"{field}={event.get(field)}" for field in PLAYER_ID_FIELDS if field in event)
     return f"PlayerIDs=[{', '.join(player_ids)}]"
 
-def print_insert_failure(event_name, match_id, round_index, round_id, event, exc):
+def print_insert_failure(event_name, match_id, round_index, round_id, event, e):
     print(
         f"[upload_match] {event_name} insert failed. "
         f"MatchID={match_id}, RoundIndex={round_index}, RoundID={round_id}, "
-        f"{format_player_ids(event)}, Event={event}, Error={exc}"
+        f"{format_player_ids(event)}, Event={event}, Error={e}"
     )
 
 def validate_authorization(request, expected_auth_key):

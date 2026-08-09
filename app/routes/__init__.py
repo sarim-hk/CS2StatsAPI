@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-
 from .match_panel import router as match_router
 from .matches_panel import router as matches_router
 from .player_panel import router as player_router

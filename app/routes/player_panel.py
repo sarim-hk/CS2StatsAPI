@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
-
 from app.database import fetch_player_panel, get_db
 
 router = APIRouter()
-
 
 @router.get("/player_panel")
 def player_panel(player_id = Query(...), db=Depends(get_db)):

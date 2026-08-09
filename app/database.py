@@ -1,216 +1,6 @@
 from contextlib import contextmanager
 import mysql.connector
-
 from .config import get_settings
-
-
-CREATE_TABLES_SQL = """
-CREATE TABLE IF NOT EXISTS CS2S_Map (
-    MapID varchar(128) PRIMARY KEY NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_PlayerInfo (
-    PlayerID bigint UNSIGNED PRIMARY KEY NOT NULL,
-    ELO int UNSIGNED DEFAULT 1000 NOT NULL,
-    Username varchar(255) DEFAULT 'Anonymous' NOT NULL,
-    AvatarHash varchar(255) DEFAULT 'b5bd56c1aa4644a474a2e4972be27ef9e82e517e' NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Match (
-    MatchID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    MapID varchar(128) NOT NULL,
-    StartTick int UNSIGNED NOT NULL,
-    EndTick int UNSIGNED NOT NULL,
-    MatchDate datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    FOREIGN KEY (MapID) REFERENCES CS2S_Map(MapID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Team (
-    TeamID varchar(32) PRIMARY KEY,
-    Size tinyint UNSIGNED NOT NULL,
-    ELO int UNSIGNED DEFAULT 1000 NOT NULL,
-    Name varchar(64) DEFAULT 'Team' NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_TeamResult (
-    TeamID varchar(32) NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    Score smallint UNSIGNED NOT NULL,
-    Result ENUM('Win', 'Loss', 'Tie') NOT NULL,
-    Side tinyint UNSIGNED NOT NULL,
-    DeltaELO int DEFAULT 0 NOT NULL,
-    PRIMARY KEY (TeamID, MatchID),
-    FOREIGN KEY (TeamID) REFERENCES CS2S_Team(TeamID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Round (
-    RoundID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    WinnerTeamID varchar(32) NOT NULL,
-    LoserTeamID varchar(32) NOT NULL,
-    WinnerSide tinyint UNSIGNED NOT NULL,
-    LoserSide tinyint UNSIGNED NOT NULL,
-    RoundEndReason tinyint UNSIGNED NOT NULL,
-    StartTick int UNSIGNED NOT NULL,
-    EndTick int UNSIGNED NOT NULL,
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (WinnerTeamID) REFERENCES CS2S_Team(TeamID),
-    FOREIGN KEY (LoserTeamID) REFERENCES CS2S_Team(TeamID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Death (
-    DeathID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    AttackerID bigint UNSIGNED NULL,
-    AttackerSide tinyint UNSIGNED NULL,
-    AssisterID bigint UNSIGNED NULL,
-    AssisterSide tinyint UNSIGNED NULL,
-    VictimID bigint UNSIGNED NOT NULL,
-    VictimSide tinyint UNSIGNED NOT NULL,
-    Weapon varchar(32) NOT NULL,
-    Hitgroup tinyint UNSIGNED NOT NULL,
-    RoundTick int UNSIGNED NOT NULL,
-    OpeningDeath bool NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (AttackerID) REFERENCES CS2S_PlayerInfo(PlayerID),
-    FOREIGN KEY (AssisterID) REFERENCES CS2S_PlayerInfo(PlayerID),
-    FOREIGN KEY (VictimID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Hurt (
-    HurtID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    AttackerID bigint UNSIGNED NULL,
-    AttackerSide tinyint UNSIGNED NULL,
-    VictimID bigint UNSIGNED NOT NULL,
-    VictimSide tinyint UNSIGNED NULL,
-    Damage smallint UNSIGNED NOT NULL,
-    Weapon varchar(32) NOT NULL,
-    Hitgroup tinyint UNSIGNED NOT NULL,
-    RoundTick int UNSIGNED NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (AttackerID) REFERENCES CS2S_PlayerInfo(PlayerID),
-    FOREIGN KEY (VictimID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Blind (
-    BlindID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    ThrowerID bigint UNSIGNED NOT NULL,
-    ThrowerSide tinyint UNSIGNED NOT NULL,
-    BlindedID bigint UNSIGNED NOT NULL,
-    BlindedSide tinyint UNSIGNED NOT NULL,
-    Duration float NOT NULL,
-    RoundTick int UNSIGNED NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (ThrowerID) REFERENCES CS2S_PlayerInfo(PlayerID),
-    FOREIGN KEY (BlindedID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Grenade (
-    GrenadeID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    ThrowerID bigint UNSIGNED NOT NULL,
-    ThrowerSide tinyint UNSIGNED NOT NULL,
-    Weapon varchar(32) NOT NULL,
-    RoundTick int UNSIGNED NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (ThrowerID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_KAST (
-    KASTID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    PlayerID bigint UNSIGNED NOT NULL,
-    PlayerSide tinyint UNSIGNED NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Clutch (
-    ClutchID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    PlayerID bigint UNSIGNED NOT NULL,
-    PlayerSide tinyint UNSIGNED NOT NULL,
-    EnemyCount tinyint UNSIGNED NOT NULL,
-    Result ENUM('Win', 'Loss') NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Duel (
-    DuelID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    RoundID int UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    WinnerID bigint UNSIGNED NOT NULL,
-    WinnerSide tinyint UNSIGNED NOT NULL,
-    LoserID bigint UNSIGNED NOT NULL,
-    LoserSide tinyint UNSIGNED NOT NULL,
-    FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
-    FOREIGN KEY (WinnerID) REFERENCES CS2S_PlayerInfo(PlayerID),
-    FOREIGN KEY (LoserID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_LivePlayers (
-    PlayerID bigint NOT NULL,
-    Kills int DEFAULT 0 NOT NULL,
-    Assists int UNSIGNED DEFAULT 0 NOT NULL,
-    Deaths int UNSIGNED DEFAULT 0 NOT NULL,
-    ADR float UNSIGNED DEFAULT 0 NOT NULL,
-    Health smallint UNSIGNED DEFAULT 0 NOT NULL,
-    Money int UNSIGNED DEFAULT 0 NOT NULL,
-    Side tinyint UNSIGNED NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_LiveStatus (
-    StaticID int PRIMARY KEY,
-    MapID varchar(128),
-    BombStatus tinyint UNSIGNED,
-    TScore smallint UNSIGNED,
-    CTScore smallint UNSIGNED,
-    InsertDate datetime DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Team_Players (
-    TeamID varchar(32) NOT NULL,
-    PlayerID bigint UNSIGNED NOT NULL,
-    PRIMARY KEY (TeamID, PlayerID),
-    FOREIGN KEY (TeamID) REFERENCES CS2S_Team(TeamID),
-    FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_Player_Matches (
-    PlayerID bigint UNSIGNED NOT NULL,
-    MatchID int UNSIGNED NOT NULL,
-    PRIMARY KEY (PlayerID, MatchID),
-    FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID),
-    FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID)
-);
-
-CREATE TABLE IF NOT EXISTS CS2S_PlayerOfTheWeek (
-    PlayerID bigint UNSIGNED NOT NULL,
-    WeekPosition smallint UNSIGNED DEFAULT 0 NOT NULL,
-    BaseRating float DEFAULT 0 NOT NULL,
-    WeekRating float DEFAULT 0 NOT NULL,
-    RatingDelta float DEFAULT 0 NOT NULL,
-    PRIMARY KEY (PlayerID),
-    FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
-);
-"""
 
 def create_db_connection(settings):
     return mysql.connector.connect(
@@ -221,6 +11,215 @@ def create_db_connection(settings):
     )
 
 def create_tables(settings=None):
+
+    CREATE_TABLES_SQL = """
+    CREATE TABLE IF NOT EXISTS CS2S_Map (
+        MapID varchar(128) PRIMARY KEY NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_PlayerInfo (
+        PlayerID bigint UNSIGNED PRIMARY KEY NOT NULL,
+        ELO int UNSIGNED DEFAULT 1000 NOT NULL,
+        Username varchar(255) DEFAULT 'Anonymous' NOT NULL,
+        AvatarHash varchar(255) DEFAULT 'b5bd56c1aa4644a474a2e4972be27ef9e82e517e' NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Match (
+        MatchID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        MapID varchar(128) NOT NULL,
+        StartTick int UNSIGNED NOT NULL,
+        EndTick int UNSIGNED NOT NULL,
+        MatchDate datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        FOREIGN KEY (MapID) REFERENCES CS2S_Map(MapID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Team (
+        TeamID varchar(32) PRIMARY KEY,
+        Size tinyint UNSIGNED NOT NULL,
+        ELO int UNSIGNED DEFAULT 1000 NOT NULL,
+        Name varchar(64) DEFAULT 'Team' NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_TeamResult (
+        TeamID varchar(32) NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        Score smallint UNSIGNED NOT NULL,
+        Result ENUM('Win', 'Loss', 'Tie') NOT NULL,
+        Side tinyint UNSIGNED NOT NULL,
+        DeltaELO int DEFAULT 0 NOT NULL,
+        PRIMARY KEY (TeamID, MatchID),
+        FOREIGN KEY (TeamID) REFERENCES CS2S_Team(TeamID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Round (
+        RoundID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        WinnerTeamID varchar(32) NOT NULL,
+        LoserTeamID varchar(32) NOT NULL,
+        WinnerSide tinyint UNSIGNED NOT NULL,
+        LoserSide tinyint UNSIGNED NOT NULL,
+        RoundEndReason tinyint UNSIGNED NOT NULL,
+        StartTick int UNSIGNED NOT NULL,
+        EndTick int UNSIGNED NOT NULL,
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (WinnerTeamID) REFERENCES CS2S_Team(TeamID),
+        FOREIGN KEY (LoserTeamID) REFERENCES CS2S_Team(TeamID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Death (
+        DeathID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        AttackerID bigint UNSIGNED NULL,
+        AttackerSide tinyint UNSIGNED NULL,
+        AssisterID bigint UNSIGNED NULL,
+        AssisterSide tinyint UNSIGNED NULL,
+        VictimID bigint UNSIGNED NOT NULL,
+        VictimSide tinyint UNSIGNED NOT NULL,
+        Weapon varchar(32) NOT NULL,
+        Hitgroup tinyint UNSIGNED NOT NULL,
+        RoundTick int UNSIGNED NOT NULL,
+        OpeningDeath bool NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (AttackerID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        FOREIGN KEY (AssisterID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        FOREIGN KEY (VictimID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Hurt (
+        HurtID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        AttackerID bigint UNSIGNED NULL,
+        AttackerSide tinyint UNSIGNED NULL,
+        VictimID bigint UNSIGNED NOT NULL,
+        VictimSide tinyint UNSIGNED NULL,
+        Damage smallint UNSIGNED NOT NULL,
+        Weapon varchar(32) NOT NULL,
+        Hitgroup tinyint UNSIGNED NOT NULL,
+        RoundTick int UNSIGNED NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (AttackerID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        FOREIGN KEY (VictimID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Blind (
+        BlindID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        ThrowerID bigint UNSIGNED NOT NULL,
+        ThrowerSide tinyint UNSIGNED NOT NULL,
+        BlindedID bigint UNSIGNED NOT NULL,
+        BlindedSide tinyint UNSIGNED NOT NULL,
+        Duration float NOT NULL,
+        RoundTick int UNSIGNED NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (ThrowerID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        FOREIGN KEY (BlindedID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Grenade (
+        GrenadeID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        ThrowerID bigint UNSIGNED NOT NULL,
+        ThrowerSide tinyint UNSIGNED NOT NULL,
+        Weapon varchar(32) NOT NULL,
+        RoundTick int UNSIGNED NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (ThrowerID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_KAST (
+        KASTID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        PlayerID bigint UNSIGNED NOT NULL,
+        PlayerSide tinyint UNSIGNED NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Clutch (
+        ClutchID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        PlayerID bigint UNSIGNED NOT NULL,
+        PlayerSide tinyint UNSIGNED NOT NULL,
+        EnemyCount tinyint UNSIGNED NOT NULL,
+        Result ENUM('Win', 'Loss') NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Duel (
+        DuelID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        RoundID int UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        WinnerID bigint UNSIGNED NOT NULL,
+        WinnerSide tinyint UNSIGNED NOT NULL,
+        LoserID bigint UNSIGNED NOT NULL,
+        LoserSide tinyint UNSIGNED NOT NULL,
+        FOREIGN KEY (RoundID) REFERENCES CS2S_Round(RoundID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID),
+        FOREIGN KEY (WinnerID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        FOREIGN KEY (LoserID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_LivePlayers (
+        PlayerID bigint NOT NULL,
+        Kills int DEFAULT 0 NOT NULL,
+        Assists int UNSIGNED DEFAULT 0 NOT NULL,
+        Deaths int UNSIGNED DEFAULT 0 NOT NULL,
+        ADR float UNSIGNED DEFAULT 0 NOT NULL,
+        Health smallint UNSIGNED DEFAULT 0 NOT NULL,
+        Money int UNSIGNED DEFAULT 0 NOT NULL,
+        Side tinyint UNSIGNED NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_LiveStatus (
+        StaticID int PRIMARY KEY,
+        MapID varchar(128),
+        BombStatus tinyint UNSIGNED,
+        TScore smallint UNSIGNED,
+        CTScore smallint UNSIGNED,
+        InsertDate datetime DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Team_Players (
+        TeamID varchar(32) NOT NULL,
+        PlayerID bigint UNSIGNED NOT NULL,
+        PRIMARY KEY (TeamID, PlayerID),
+        FOREIGN KEY (TeamID) REFERENCES CS2S_Team(TeamID),
+        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_Player_Matches (
+        PlayerID bigint UNSIGNED NOT NULL,
+        MatchID int UNSIGNED NOT NULL,
+        PRIMARY KEY (PlayerID, MatchID),
+        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID)
+    );
+
+    CREATE TABLE IF NOT EXISTS CS2S_PlayerOfTheWeek (
+        PlayerID bigint UNSIGNED NOT NULL,
+        WeekPosition smallint UNSIGNED DEFAULT 0 NOT NULL,
+        BaseRating float DEFAULT 0 NOT NULL,
+        WeekRating float DEFAULT 0 NOT NULL,
+        RatingDelta float DEFAULT 0 NOT NULL,
+        PRIMARY KEY (PlayerID),
+        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
+    );
+    """
+
     db = create_db_connection(settings or get_settings())
     cursor = None
     try:
@@ -255,14 +254,11 @@ def get_db():
     finally:
         db.close()
 
-
 def _placeholders(values):
     return ", ".join(["%s"] * len(values))
 
-
 def avatar_hash_base_sql(alias="p"):
     return f"REPLACE({alias}.AvatarHash, '.jpg', '')"
-
 
 def avatar_url_sql(alias="p", size=""):
     suffix = f"_{size}" if size else ""
@@ -274,7 +270,6 @@ def avatar_url_sql(alias="p", size=""):
         ")"
     )
 
-
 def player_info_select_sql(alias="p"):
     return f"""
         {alias}.PlayerID,
@@ -284,7 +279,6 @@ def player_info_select_sql(alias="p"):
         {avatar_url_sql(alias, "medium")} AS AvatarM,
         {avatar_url_sql(alias, "full")} AS AvatarL
     """
-
 
 def fetch_matches(db, player_id=None, map_name=None, page=None):
     cursor = db.cursor(dictionary=True)
@@ -345,7 +339,6 @@ def fetch_matches(db, player_id=None, map_name=None, page=None):
     finally:
         cursor.close()
 
-
 def fetch_player_elo_history(db, player_id):
     cursor = db.cursor(dictionary=True)
     try:
@@ -379,7 +372,6 @@ def fetch_player_elo_history(db, player_id):
     finally:
         cursor.close()
 
-
 def fetch_player_panel(db, player_id):
     cursor = db.cursor(dictionary=True)
     try:
@@ -399,7 +391,6 @@ def fetch_player_panel(db, player_id):
     finally:
         cursor.close()
 
-
 def fetch_players_panel(db):
     cursor = db.cursor(dictionary=True)
     try:
@@ -417,11 +408,9 @@ def fetch_players_panel(db):
     finally:
         cursor.close()
 
-
 def fetch_match_by_id(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Match WHERE MatchID = %s", (match_id,))
     return cursor.fetchone()
-
 
 def fetch_team_results_for_match(cursor, match_id):
     cursor.execute(
@@ -435,7 +424,6 @@ def fetch_team_results_for_match(cursor, match_id):
     )
     return cursor.fetchall()
 
-
 def fetch_player_teams_for_match(cursor, match_id):
     cursor.execute(
         """
@@ -447,7 +435,6 @@ def fetch_player_teams_for_match(cursor, match_id):
         (match_id,),
     )
     return cursor.fetchall()
-
 
 def fetch_players_info_for_match(cursor, match_id):
     cursor.execute(
@@ -465,41 +452,33 @@ def fetch_players_info_for_match(cursor, match_id):
     )
     return cursor.fetchall()
 
-
 def fetch_rounds_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Round WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
-
 
 def fetch_deaths_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Death WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
 
-
 def fetch_clutches_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Clutch WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
-
 
 def fetch_duels_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Duel WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
 
-
 def fetch_kast_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_KAST WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
-
 
 def fetch_blinds_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Blind WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
 
-
 def fetch_damage_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Hurt WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()
-
 
 def fetch_match_results_match_range(cursor, range_size, player_ids, map_id=None):
     player_id_placeholders = _placeholders(player_ids)
@@ -525,7 +504,6 @@ def fetch_match_results_match_range(cursor, range_size, player_ids, map_id=None)
 
     cursor.execute(query, params)
     return cursor.fetchall()
-
 
 def fetch_match_results_date_range(cursor, start_date, player_ids, map_id=None):
     player_id_placeholders = _placeholders(player_ids)
@@ -555,7 +533,6 @@ def fetch_match_results_date_range(cursor, start_date, player_ids, map_id=None):
     cursor.execute(query, params)
     return cursor.fetchall()
 
-
 def fetch_round_sides_for_player_matches(cursor, match_ids, player_id):
     parameterised_match_ids = _placeholders(match_ids)
     cursor.execute(
@@ -581,7 +558,6 @@ def fetch_round_sides_for_player_matches(cursor, match_ids, player_id):
     )
     return cursor.fetchall()
 
-
 def fetch_match_ids_for_map(cursor, match_ids, map_id):
     parameterized_match_ids = _placeholders(match_ids)
     cursor.execute(
@@ -593,7 +569,6 @@ def fetch_match_ids_for_map(cursor, match_ids, map_id):
         (*match_ids, map_id),
     )
     return cursor.fetchall()
-
 
 def fetch_player_stats_for_rounds(cursor, round_ids, player_id, utility_weapons):
     round_placeholders = _placeholders(round_ids)
@@ -681,7 +656,6 @@ def fetch_player_stats_for_rounds(cursor, round_ids, player_id, utility_weapons)
     )
     return cursor.fetchone()
 
-
 def insert_map(cursor, map_id):
     cursor.execute(
         """
@@ -690,7 +664,6 @@ def insert_map(cursor, map_id):
         """,
         (map_id,),
     )
-
 
 def insert_match(cursor, map_id, start_tick, end_tick):
     cursor.execute(
@@ -702,7 +675,6 @@ def insert_match(cursor, map_id, start_tick, end_tick):
     )
     return cursor.lastrowid
 
-
 def insert_team(cursor, team_id, size, name):
     cursor.execute(
         """
@@ -711,7 +683,6 @@ def insert_team(cursor, team_id, size, name):
         """,
         (team_id, size, name),
     )
-
 
 def insert_team_player(cursor, team_id, player_id):
     cursor.execute(
@@ -722,7 +693,6 @@ def insert_team_player(cursor, team_id, player_id):
         (team_id, player_id),
     )
 
-
 def insert_player_match(cursor, player_id, match_id):
     cursor.execute(
         """
@@ -731,7 +701,6 @@ def insert_player_match(cursor, player_id, match_id):
         """,
         (player_id, match_id),
     )
-
 
 def fetch_team_average_elo(cursor, team_id):
     cursor.execute(
@@ -744,7 +713,6 @@ def fetch_team_average_elo(cursor, team_id):
         (team_id,),
     )
     return cursor.fetchone()[0]
-
 
 def insert_round(cursor, match_id, match_round):
     cursor.execute(
@@ -765,7 +733,6 @@ def insert_round(cursor, match_id, match_round):
     )
     return cursor.lastrowid
 
-
 def insert_clutch(cursor, round_id, match_id, clutch):
     cursor.execute(
         """
@@ -775,7 +742,6 @@ def insert_clutch(cursor, round_id, match_id, clutch):
         (round_id, match_id, clutch["ClutcherID"], clutch["ClutcherSide"], clutch["EnemyCount"], clutch["Result"]),
     )
 
-
 def insert_duel(cursor, round_id, match_id, duel):
     cursor.execute(
         """
@@ -784,7 +750,6 @@ def insert_duel(cursor, round_id, match_id, duel):
         """,
         (round_id, match_id, duel["WinnerID"], duel["WinnerSide"], duel["LoserID"], duel["LoserSide"]),
     )
-
 
 def insert_hurt(cursor, round_id, match_id, hurt):
     cursor.execute(
@@ -805,7 +770,6 @@ def insert_hurt(cursor, round_id, match_id, hurt):
             hurt["RoundTick"],
         ),
     )
-
 
 def insert_death(cursor, round_id, match_id, death):
     cursor.execute(
@@ -829,7 +793,6 @@ def insert_death(cursor, round_id, match_id, death):
         ),
     )
 
-
 def insert_blind(cursor, round_id, match_id, blind):
     cursor.execute(
         """
@@ -848,7 +811,6 @@ def insert_blind(cursor, round_id, match_id, blind):
         ),
     )
 
-
 def insert_grenade(cursor, round_id, match_id, grenade):
     cursor.execute(
         """
@@ -857,7 +819,6 @@ def insert_grenade(cursor, round_id, match_id, grenade):
         """,
         (round_id, match_id, grenade["ThrowerID"], grenade["ThrowerSide"], grenade["Weapon"], grenade["RoundTick"]),
     )
-
 
 def insert_kast(cursor, round_id, match_id, kast):
     cursor.execute(
@@ -868,7 +829,6 @@ def insert_kast(cursor, round_id, match_id, kast):
         (round_id, match_id, kast["PlayerID"], kast["PlayerSide"]),
     )
 
-
 def insert_team_result(cursor, team_id, match_id, score, result, side, delta_elo):
     cursor.execute(
         """
@@ -877,7 +837,6 @@ def insert_team_result(cursor, team_id, match_id, score, result, side, delta_elo
         """,
         (team_id, match_id, score, result, side, delta_elo),
     )
-
 
 def update_team_elo(cursor, delta_elo, team_id):
     cursor.execute(
@@ -890,7 +849,6 @@ def update_team_elo(cursor, delta_elo, team_id):
     )
     return cursor.rowcount
 
-
 def update_team_players_elo(cursor, delta_elo, team_id):
     cursor.execute(
         """
@@ -902,7 +860,6 @@ def update_team_players_elo(cursor, delta_elo, team_id):
         (delta_elo, team_id),
     )
     return cursor.rowcount
-
 
 def insert_player_info(cursor, player_id, username, avatar_hash):
     cursor.execute(

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
-
 from app.database import (
     fetch_blinds_for_match,
     fetch_clutches_for_match,
@@ -20,7 +19,6 @@ router = APIRouter()
 
 UTILITY_WEAPONS = {"smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"}
 SIDES = ("Overall", "Terrorist", "CounterTerrorist")
-
 
 class MatchData:
     def __init__(
@@ -49,7 +47,6 @@ class MatchData:
         self.damage_stats = damage_stats
         self.player_teams = player_teams
 
-
 @router.get("/match_panel")
 def match_panel(match_id: str = Query(...), db=Depends(get_db)):
     cursor = None
@@ -70,7 +67,6 @@ def match_panel(match_id: str = Query(...), db=Depends(get_db)):
         if cursor:
             cursor.close()
 
-
 def build_match_response(match_data):
     players_stats = aggregate_player_stats(match_data)
     apply_player_info_and_derived_stats(players_stats, match_data)
@@ -82,7 +78,6 @@ def build_match_response(match_data):
     match_data.match["Deaths"] = match_data.deaths
 
     return match_data.match
-
 
 def aggregate_player_stats(match_data):
     players_stats = {}
@@ -154,7 +149,6 @@ def aggregate_player_stats(match_data):
 
     return players_stats
 
-
 def apply_player_info_and_derived_stats(players_stats, match_data):
     player_side_rounds = calculate_player_side_rounds(match_data.rounds, match_data.player_teams)
 
@@ -171,7 +165,6 @@ def apply_player_info_and_derived_stats(players_stats, match_data):
         _calculate_derived_stats(stats["Terrorist"], t_rounds)
         _calculate_derived_stats(stats["CounterTerrorist"], ct_rounds)
 
-
 def calculate_player_side_rounds(rounds, player_teams):
     player_side_rounds = {}
     player_team_map = {player["PlayerID"]: player["TeamID"] for player in player_teams}
@@ -186,7 +179,6 @@ def calculate_player_side_rounds(rounds, player_teams):
                 player_side_rounds[player_id][str(match_round["LoserSide"])] += 1
 
     return player_side_rounds
-
 
 def build_teams(team_results, player_teams, players_stats):
     teams = {
@@ -204,7 +196,6 @@ def build_teams(team_results, player_teams, players_stats):
             teams[team_id]["Players"][player_id] = players_stats[player_id]
 
     return teams
-
 
 def fetch_match_data(cursor, match_id):
     match = fetch_match_by_id(cursor, match_id)
@@ -268,7 +259,6 @@ def fetch_match_data(cursor, match_id):
         player_teams=player_teams,
     )
 
-
 def _create_empty_playerstat(player_id):
     return {
         "PlayerID": player_id,
@@ -283,7 +273,6 @@ def _create_empty_playerstat(player_id):
         "Headshots": 0,
     }
 
-
 def _create_empty_side_stats(player_id):
     return {
         "Overall": _create_empty_playerstat(player_id),
@@ -291,12 +280,10 @@ def _create_empty_side_stats(player_id):
         "CounterTerrorist": _create_empty_playerstat(player_id),
     }
 
-
 def _get_or_create_player_stats(players_stats, player_id):
     if player_id not in players_stats:
         players_stats[player_id] = _create_empty_side_stats(player_id)
     return players_stats[player_id]
-
 
 def _side_stats(stats, side):
     if side == 2:
@@ -305,7 +292,6 @@ def _side_stats(stats, side):
         return stats["CounterTerrorist"]
     return None
 
-
 def opposing_side(victim_side):
     if victim_side == 2:
         return 3
@@ -313,17 +299,14 @@ def opposing_side(victim_side):
         return 2
     return None
 
-
 def _add_blind(stats, duration):
     stats["Blinds"]["Count"] += 1
     stats["Blinds"]["TotalDuration"] += duration
-
 
 def _add_damage(stats, amount, is_utility):
     stats["Damage"] += amount
     if is_utility:
         stats["UtilityDamage"] += amount
-
 
 def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
@@ -337,7 +320,6 @@ def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
         + 0.1587
     ) or 0.0
     return impact, rating
-
 
 def _calculate_derived_stats(stats, total_rounds):
     if total_rounds > 0:

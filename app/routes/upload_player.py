@@ -4,10 +4,8 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-
 from app.config import Settings, get_settings
 from app.database import transaction, insert_player_info
-
 from app.routes.upload_match import validate_authorization
 
 router = APIRouter()
@@ -64,7 +62,6 @@ async def upload_player(request: Request, settings: Settings = Depends(get_setti
         "Username": username,
         "AvatarHash": avatar_hash,
     }
-
 
 def get_steam_summary(steam_id, steam_api_key: str):
     query = urllib.parse.urlencode({"key": steam_api_key, "steamids": steam_id})

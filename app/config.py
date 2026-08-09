@@ -10,6 +10,7 @@ class Settings(BaseModel):
     mysql_username: str = Field(alias="MySQLUsername")
     mysql_password: str = Field(alias="MySQLPassword")
     api_auth_key: str = Field(alias="APIAuthKey")
+    steam_api_auth_key: str = Field(alias="SteamAPIAuthKey")
 
 
 def _config_path():

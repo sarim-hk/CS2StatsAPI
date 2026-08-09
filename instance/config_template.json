@@ -4,5 +4,6 @@
     "MySQLUsername": "",
     "MySQLPassword": "",
     "APIAuthKey": "",
+    "SteamAPIAuthKey": "",
     "_readme": "Rename this file to `config.json` and input details above ^^"
 }

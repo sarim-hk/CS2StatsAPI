@@ -16,6 +16,6 @@ def players_panel(db=Depends(get_db)):
 
         return players
 
-    except Error as exc:
-        print(f"Error: {exc}")
-        raise HTTPException(status_code=500, detail="Failed to fetch data.") from exc
+    except Error as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch data.") from e

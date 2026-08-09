@@ -21,13 +21,13 @@ def upload_player(request: Request, settings: Settings = Depends(get_settings)):
         payload = json.loads(body.decode("utf-8"))
         print(f"[upload_player] JSON parsed. Payload={payload}")
 
-    except UnicodeDecodeError as exc:
+    except UnicodeDecodeError as e:
         print("[upload_player] Request body was not valid UTF-8.")
-        raise HTTPException(status_code=400, detail="Request body must be UTF-8 encoded.") from exc
+        raise HTTPException(status_code=400, detail="Request body must be UTF-8 encoded.") from e
     
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError as e:
         print("[upload_player] Request body was not valid JSON.")
-        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from e
 
     player_id = payload.get("playerID")
     if player_id is None:
@@ -45,8 +45,8 @@ def upload_player(request: Request, settings: Settings = Depends(get_settings)):
             rows = insert_player_info(cursor, player_id, username, avatar_hash)
             print(f"[upload_player] Player inserted/updated. PlayerID={player_id}, Username={username}, Rows={rows}")
 
-        except Exception as exc:
-            print(f"[upload_player] Error while inserting player. PlayerID={player_id}, Error={exc}")
+        except Exception as e:
+            print(f"[upload_player] Error while inserting player. PlayerID={player_id}, Error={e}")
             raise
 
         finally:
@@ -83,10 +83,10 @@ def get_steam_summary(steam_id, steam_api_key: str):
                     return personaname, avatar_hash
             print(f"[upload_player] Failed to fetch Steam summary. Status={response.status}")
 
-    except urllib.error.HTTPError as exc:
-        print(f"[upload_player] Steam HTTP error. Status={exc.code}, Error={exc}")
+    except urllib.error.HTTPError as e:
+        print(f"[upload_player] Steam HTTP error. Status={e.code}, Error={e}")
 
-    except urllib.error.URLError as exc:
-        print(f"[upload_player] Steam request exception. Error={exc}")
+    except urllib.error.URLError as e:
+        print(f"[upload_player] Steam request exception. Error={e}")
 
     return None, None

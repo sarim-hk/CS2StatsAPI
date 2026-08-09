@@ -2,7 +2,14 @@ from datetime import datetime, timedelta
 import traceback
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import get_db
+from app.database import (
+    fetch_match_ids_for_map,
+    fetch_match_results_date_range as db_fetch_match_results_date_range,
+    fetch_match_results_match_range as db_fetch_match_results_match_range,
+    fetch_player_stats_for_rounds,
+    fetch_round_sides_for_player_matches,
+    get_db,
+)
 
 utility_weapons = ["smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"]
 
@@ -103,119 +110,28 @@ def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Quer
 
 def get_match_results_match_range(cursor, range_filter, player_ids, map_id=None):
     match_range = match_ranges[range_filter]
-    player_id_placeholders = ", ".join(["%s"] * len(player_ids))
-    
-    query = f"""
-        SELECT 
-            pm.MatchID,
-            tr.Result
-        FROM CS2S_Player_Matches pm
-        JOIN CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
-        JOIN CS2S_Team_Players tp ON tr.TeamID = tp.TeamID
-        JOIN CS2S_Match m ON pm.MatchID = m.MatchID
-        WHERE pm.PlayerID IN ({player_id_placeholders}) 
-          AND tp.PlayerID IN ({player_id_placeholders})
-        {'' if map_id is None else 'AND m.MapID = %s'}
-        GROUP BY pm.MatchID, tr.Result
-        ORDER BY pm.MatchID DESC
-        LIMIT %s
-    """
-    
-    # Prepare parameters
-    if map_id is not None:
-        params = (*player_ids, *player_ids, map_id, match_range)
-    else:
-        params = (*player_ids, *player_ids, match_range)
-    
-    cursor.execute(query, params)
-    results = cursor.fetchall()
-    return results
+    return db_fetch_match_results_match_range(cursor, match_range, player_ids, map_id)
+
 
 def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
     start_date = datetime.now() - date_ranges[range_filter]
     start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Prepare placeholders for player IDs
-    player_id_placeholders = ", ".join(["%s"] * len(player_ids))
-    
-    query = f"""
-    WITH DateRangeMatches AS (
-        SELECT MatchID, MatchDate
-        FROM CS2S_Match
-        WHERE MatchDate >= %s
-          {'' if map_id is None else 'AND MapID = %s'}
-    )
-    SELECT 
-        pm.MatchID,
-        tr.Result
-    FROM DateRangeMatches drm
-    JOIN CS2S_Player_Matches pm ON drm.MatchID = pm.MatchID
-    JOIN CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
-    JOIN CS2S_Team_Players tp ON tr.TeamID = tp.TeamID
-    WHERE pm.PlayerID IN ({player_id_placeholders}) 
-      AND tp.PlayerID IN ({player_id_placeholders})
-    GROUP BY pm.MatchID, tr.Result
-    """
-    
-    # Prepare parameters
-    if map_id is not None:
-        params = (
-            start_date_str,
-            map_id,
-            *player_ids, *player_ids
-        )
-    else:
-        params = (
-            start_date_str,
-            *player_ids, *player_ids
-        )
-    
-    cursor.execute(query, params)
-    results = cursor.fetchall()
-    return results
+    return db_fetch_match_results_date_range(cursor, start_date_str, player_ids, map_id)
+
 
 def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
-    parameterised_match_ids = ", ".join(["%s"] * len(match_ids))
-
-    cursor.execute(f"""
-    SELECT 
-        R.RoundID,
-        R.MatchID,
-        CASE 
-            WHEN T.PlayerID IS NOT NULL THEN R.WinnerSide
-            ELSE R.LoserSide
-        END AS PlayerSide
-    FROM 
-        CS2S_Round R
-    LEFT JOIN 
-        CS2S_Team_Players T ON R.WinnerTeamID = T.TeamID AND T.PlayerID = %s
-    LEFT JOIN 
-        CS2S_Team_Players LT ON R.LoserTeamID = LT.TeamID AND LT.PlayerID = %s
-    WHERE 
-        (T.PlayerID IS NOT NULL OR LT.PlayerID IS NOT NULL)
-        AND R.MatchID IN ({parameterised_match_ids});
-    """, (player_id, player_id, *match_ids))
-
-    rounds = cursor.fetchall()
+    rounds = fetch_round_sides_for_player_matches(cursor, match_ids, player_id)
 
     t_rounds = [match_round["RoundID"] for match_round in rounds if match_round["PlayerSide"] == 2]
     ct_rounds = [match_round["RoundID"] for match_round in rounds if match_round["PlayerSide"] == 3]
 
     return t_rounds, ct_rounds
 
+
 def filter_match_ids_by_map(cursor, match_ids, map_id):
-    parameterized_match_ids = ", ".join(["%s"] * len(match_ids))
+    result = fetch_match_ids_for_map(cursor, match_ids, map_id)
+    return [row["MatchID"] for row in result]
 
-    cursor.execute(f"""
-        SELECT MatchID
-        FROM CS2S_Match
-        WHERE MatchID IN ({parameterized_match_ids}) AND MapID = %s
-    """, (*match_ids, map_id))
-
-    result = cursor.fetchall()
-
-    filtered_match_ids = [row['MatchID'] for row in result]
-    return filtered_match_ids
 
 def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     # Convert inputs to float to ensure float arithmetic
@@ -249,77 +165,10 @@ def get_stats(cursor, round_ids, player_id):
     if not round_ids:
         return empty_stats(player_id)
 
-    cursor.execute(f"""
-    WITH 
-    damage_stats AS (
-        SELECT 
-            AttackerID,
-            SUM(CASE WHEN Weapon IN ({", ".join(["%s"] * len(utility_weapons))}) THEN Damage ELSE 0 END) AS UtilityDamage,
-            SUM(CASE WHEN Weapon NOT IN ({", ".join(["%s"] * len(utility_weapons))}) THEN Damage ELSE 0 END) +
-            SUM(CASE WHEN Weapon IN ({", ".join(["%s"] * len(utility_weapons))}) THEN Damage ELSE 0 END) AS Damage
-        FROM CS2S_Hurt
-        WHERE AttackerID = %s AND RoundID IN ({", ".join(["%s"] * len(round_ids))})
-        GROUP BY AttackerID
-    ),
-    death_stats AS (
-        SELECT 
-            %s AS PlayerID,
-            SUM(CASE WHEN AttackerID = %s THEN 1 ELSE 0 END) AS Kills,
-            SUM(CASE WHEN AssisterID = %s THEN 1 ELSE 0 END) AS Assists,
-            SUM(CASE WHEN VictimID = %s THEN 1 ELSE 0 END) AS Deaths,
-            SUM(CASE WHEN AttackerID = %s AND Hitgroup = 1 THEN 1 ELSE 0 END) AS Headshots
-        FROM CS2S_Death
-        WHERE RoundID IN ({", ".join(["%s"] * len(round_ids))})
-    ),
-    blind_stats AS (
-        SELECT 
-            ThrowerID,
-            COUNT(*) AS EnemiesFlashed,
-            SUM(Duration) AS TotalDuration
-        FROM CS2S_Blind
-        WHERE ThrowerID = %s AND RoundID IN ({", ".join(["%s"] * len(round_ids))})
-        GROUP BY ThrowerID
-    ),
-    kast_stats AS (
-        SELECT 
-            PlayerID,
-            COUNT(*) AS KAST
-        FROM CS2S_KAST
-        WHERE PlayerID = %s AND RoundID IN ({", ".join(["%s"] * len(round_ids))})
-        GROUP BY PlayerID
-    )
-    SELECT 
-        %s AS PlayerID,
-        COALESCE(d.Damage, 0) AS Damage,
-        COALESCE(d.UtilityDamage, 0) AS UtilityDamage,
-        COALESCE(ds.Kills, 0) AS Kills,
-        COALESCE(ds.Assists, 0) AS Assists,
-        COALESCE(ds.Deaths, 0) AS Deaths,
-        COALESCE(ds.Headshots, 0) AS Headshots,
-        COALESCE(b.EnemiesFlashed, 0) AS EnemiesFlashed,
-        COALESCE(b.TotalDuration, 0.0) AS TotalDuration,
-        %s AS RoundsPlayed,
-        COALESCE(k.KAST, 0) AS RoundsKAST
-    FROM 
-        death_stats ds
-    LEFT JOIN
-        damage_stats d ON d.AttackerID = ds.PlayerID
-    LEFT JOIN 
-        blind_stats b ON ds.PlayerID = b.ThrowerID
-    LEFT JOIN 
-        kast_stats k ON ds.PlayerID = k.PlayerID
-    """, (
-        *utility_weapons, *utility_weapons, *utility_weapons, player_id, *round_ids,
-        player_id, player_id, player_id, player_id, player_id, *round_ids,
-        player_id, *round_ids,
-        player_id, *round_ids,
-        player_id, len(round_ids)
-    ))
-
-    result = cursor.fetchone()
+    result = fetch_player_stats_for_rounds(cursor, round_ids, player_id, utility_weapons)
     if result is None:
         return empty_stats(player_id)
-    
+
     stats = {
         "PlayerID": player_id,
         "Damage": result['Damage'],
@@ -336,7 +185,6 @@ def get_stats(cursor, round_ids, player_id):
         "RoundsKAST": result['RoundsKAST']
     }
 
-    # Ensure float division
     stats["KAST"] = (float(stats["RoundsKAST"]) / float(stats["RoundsPlayed"]) * 100.0) if stats["RoundsPlayed"] > 0 else 0.0
     stats["ADR"] = float(stats["Damage"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
     stats["KPR"] = float(stats["Kills"]) / float(stats["RoundsPlayed"]) if stats["RoundsPlayed"] > 0 else 0.0
@@ -350,7 +198,7 @@ def get_stats(cursor, round_ids, player_id):
         stats["KAST"],
         stats["ADR"],
     )
-    
+
     stats["KAST"] = round(stats["KAST"], 2) or 0
     stats["ADR"] = round(stats["ADR"], 2) or 0
     stats["KPR"] = round(stats["KPR"], 2) or 0
@@ -360,6 +208,7 @@ def get_stats(cursor, round_ids, player_id):
     stats["Rating"] = round(stats["Rating"], 2) or 0
 
     return stats
+
 
 def combine_stats(t_stats, ct_stats):
     stats = {

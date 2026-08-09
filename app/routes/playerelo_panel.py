@@ -1,43 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import get_db
+from app.database import fetch_player_elo_history, get_db
 
 router = APIRouter()
 
 
 @router.get("/playerelo_panel")
 def playerelo_panel(player_id = Query(...), db = Depends(get_db)):
-    cursor = None
     try:
-        cursor = db.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT
-                p.PlayerID,
-                p.ELO AS CurrentELO,
-                tr.MatchID,
-                tr.DeltaELO
-            FROM
-                CS2S_PlayerInfo p
-            JOIN
-                CS2S_Player_Matches pm ON p.PlayerID = pm.PlayerID
-            JOIN
-                CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
-            WHERE
-                tr.TeamID IN (
-                    SELECT TeamID
-                    FROM CS2S_Team_Players
-                    WHERE PlayerID = p.PlayerID
-                )
-                AND p.PlayerID = %s
-            ORDER BY
-                tr.MatchID DESC
-            LIMIT 10
-            """,
-            (player_id,),
-        )
-
-        results = cursor.fetchall()
+        results = fetch_player_elo_history(db, player_id)
 
         if not results:
             raise HTTPException(status_code=404, detail="No data found for the given Player ID")
@@ -66,7 +37,3 @@ def playerelo_panel(player_id = Query(...), db = Depends(get_db)):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    finally:
-        if cursor:
-            cursor.close()

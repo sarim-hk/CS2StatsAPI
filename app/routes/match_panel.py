@@ -1,9 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from mysql.connector import Error
 
-from app.database import get_db
-
-from .utils.player_info_sql import avatar_url_sql
+from app.database import (
+    fetch_blinds_for_match,
+    fetch_clutches_for_match,
+    fetch_damage_for_match,
+    fetch_deaths_for_match,
+    fetch_duels_for_match,
+    fetch_kast_for_match,
+    fetch_match_by_id,
+    fetch_player_teams_for_match,
+    fetch_players_info_for_match,
+    fetch_rounds_for_match,
+    fetch_team_results_for_match,
+    get_db,
+)
 
 router = APIRouter()
 
@@ -40,10 +51,7 @@ class MatchData:
 
 
 @router.get("/match_panel")
-def match_panel(
-    match_id: str = Query(...),
-    db=Depends(get_db),
-):
+def match_panel(match_id: str = Query(...), db=Depends(get_db)):
     cursor = None
     try:
         cursor = db.cursor(dictionary=True)
@@ -147,10 +155,7 @@ def aggregate_player_stats(match_data):
     return players_stats
 
 
-def apply_player_info_and_derived_stats(
-    players_stats,
-    match_data,
-):
+def apply_player_info_and_derived_stats(players_stats, match_data):
     player_side_rounds = calculate_player_side_rounds(match_data.rounds, match_data.player_teams)
 
     for player_id, stats in players_stats.items():
@@ -167,10 +172,7 @@ def apply_player_info_and_derived_stats(
         _calculate_derived_stats(stats["CounterTerrorist"], ct_rounds)
 
 
-def calculate_player_side_rounds(
-    rounds,
-    player_teams,
-):
+def calculate_player_side_rounds(rounds, player_teams):
     player_side_rounds = {}
     player_team_map = {player["PlayerID"]: player["TeamID"] for player in player_teams}
 
@@ -186,11 +188,7 @@ def calculate_player_side_rounds(
     return player_side_rounds
 
 
-def build_teams(
-    team_results,
-    player_teams,
-    players_stats,
-):
+def build_teams(team_results, player_teams, players_stats):
     teams = {
         team_result["TeamID"]: {
             **team_result,
@@ -209,56 +207,22 @@ def build_teams(
 
 
 def fetch_match_data(cursor, match_id):
-    cursor.execute("SELECT * FROM CS2S_Match WHERE MatchID = %s", (match_id,))
-    match = cursor.fetchone()
+    match = fetch_match_by_id(cursor, match_id)
     if not match:
         return None
 
-    cursor.execute(
-        """
-        SELECT tr.*, t.Name AS TeamName
-        FROM CS2S_TeamResult tr
-        LEFT JOIN CS2S_Team t ON tr.TeamID = t.TeamID
-        WHERE tr.MatchID = %s
-        """,
-        (match_id,),
-    )
-    team_results = cursor.fetchall()
+    team_results = fetch_team_results_for_match(cursor, match_id)
 
-    cursor.execute(
-        """
-        SELECT tp.PlayerID, tp.TeamID
-        FROM CS2S_Team_Players tp
-        JOIN CS2S_TeamResult tr ON tp.TeamID = tr.TeamID
-        WHERE tr.MatchID = %s
-        """,
-        (match_id,),
-    )
-    player_teams = cursor.fetchall()
+    player_teams = fetch_player_teams_for_match(cursor, match_id)
     for player_team in player_teams:
         player_team["PlayerID"] = str(player_team["PlayerID"])
 
-    cursor.execute(
-        f"""
-        SELECT
-            p.PlayerID,
-            p.Username,
-            {avatar_url_sql("p", "full")} AS AvatarL
-        FROM CS2S_PlayerInfo p
-        JOIN CS2S_Team_Players tp ON p.PlayerID = tp.PlayerID
-        JOIN CS2S_TeamResult tr ON tp.TeamID = tr.TeamID
-        WHERE tr.MatchID = %s
-        """,
-        (match_id,),
-    )
-    players_info = cursor.fetchall()
+    players_info = fetch_players_info_for_match(cursor, match_id)
     players_info_dict = {str(player["PlayerID"]): player for player in players_info}
 
-    cursor.execute("SELECT * FROM CS2S_Round WHERE MatchID = %s", (match_id,))
-    rounds = cursor.fetchall()
+    rounds = fetch_rounds_for_match(cursor, match_id)
 
-    cursor.execute("SELECT * FROM CS2S_Death WHERE MatchID = %s", (match_id,))
-    deaths = cursor.fetchall()
+    deaths = fetch_deaths_for_match(cursor, match_id)
     for death in deaths:
         death["VictimID"] = str(death["VictimID"])
         if death["AttackerID"]:
@@ -266,30 +230,25 @@ def fetch_match_data(cursor, match_id):
         if death["AssisterID"]:
             death["AssisterID"] = str(death["AssisterID"])
 
-    cursor.execute("SELECT * FROM CS2S_Clutch WHERE MatchID = %s", (match_id,))
-    clutches = cursor.fetchall()
+    clutches = fetch_clutches_for_match(cursor, match_id)
     for clutch in clutches:
         clutch["PlayerID"] = str(clutch["PlayerID"])
 
-    cursor.execute("SELECT * FROM CS2S_Duel WHERE MatchID = %s", (match_id,))
-    duels = cursor.fetchall()
+    duels = fetch_duels_for_match(cursor, match_id)
     for duel in duels:
         duel["WinnerID"] = str(duel["WinnerID"])
         duel["LoserID"] = str(duel["LoserID"])
 
-    cursor.execute("SELECT * FROM CS2S_KAST WHERE MatchID = %s", (match_id,))
-    kast_stats = cursor.fetchall()
+    kast_stats = fetch_kast_for_match(cursor, match_id)
     for kast in kast_stats:
         kast["PlayerID"] = str(kast["PlayerID"])
 
-    cursor.execute("SELECT * FROM CS2S_Blind WHERE MatchID = %s", (match_id,))
-    blinds = cursor.fetchall()
+    blinds = fetch_blinds_for_match(cursor, match_id)
     for blind in blinds:
         blind["ThrowerID"] = str(blind["ThrowerID"])
         blind["BlindedID"] = str(blind["BlindedID"])
 
-    cursor.execute("SELECT * FROM CS2S_Hurt WHERE MatchID = %s", (match_id,))
-    damage_stats = cursor.fetchall()
+    damage_stats = fetch_damage_for_match(cursor, match_id)
     for damage in damage_stats:
         damage["VictimID"] = str(damage["VictimID"])
         if damage["AttackerID"]:
@@ -333,10 +292,7 @@ def _create_empty_side_stats(player_id):
     }
 
 
-def _get_or_create_player_stats(
-    players_stats,
-    player_id,
-):
+def _get_or_create_player_stats(players_stats, player_id):
     if player_id not in players_stats:
         players_stats[player_id] = _create_empty_side_stats(player_id)
     return players_stats[player_id]
@@ -369,13 +325,7 @@ def _add_damage(stats, amount, is_utility):
         stats["UtilityDamage"] += amount
 
 
-def calculate_impact_and_rating(
-    kpr,
-    apr,
-    dpr,
-    kast,
-    adr,
-):
+def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
     kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
     impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
     rating = (

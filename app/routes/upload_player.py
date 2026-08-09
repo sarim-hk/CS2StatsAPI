@@ -6,7 +6,7 @@ import urllib.error
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.config import Settings, get_settings
-from app.database import transaction
+from app.database import transaction, insert_player_info
 
 from app.routes.upload_match import validate_authorization
 
@@ -22,9 +22,11 @@ async def upload_player(request: Request, settings: Settings = Depends(get_setti
     try:
         payload = json.loads(body.decode("utf-8"))
         print(f"[upload_player] JSON parsed. Payload={payload}")
+
     except UnicodeDecodeError as exc:
         print("[upload_player] Request body was not valid UTF-8.")
         raise HTTPException(status_code=400, detail="Request body must be UTF-8 encoded.") from exc
+    
     except json.JSONDecodeError as exc:
         print("[upload_player] Request body was not valid JSON.")
         raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
@@ -42,22 +44,13 @@ async def upload_player(request: Request, settings: Settings = Depends(get_setti
         print("[upload_player] Transaction started.")
 
         try:
-            cursor.execute(
-                """
-                INSERT INTO CS2S_PlayerInfo
-                    (PlayerID, Username, AvatarHash)
-                VALUES
-                    (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    Username = VALUES(Username),
-                    AvatarHash = VALUES(AvatarHash);
-                """,
-                (player_id, username, avatar_hash),
-            )
-            print(f"[upload_player] Player inserted/updated. PlayerID={player_id}, Username={username}, Rows={cursor.rowcount}")
+            rows = insert_player_info(cursor, player_id, username, avatar_hash)
+            print(f"[upload_player] Player inserted/updated. PlayerID={player_id}, Username={username}, Rows={rows}")
+
         except Exception as exc:
-            print(f"[upload_player] Error while upserting player. PlayerID={player_id}, Error={exc}")
+            print(f"[upload_player] Error while inserting player. PlayerID={player_id}, Error={exc}")
             raise
+
         finally:
             cursor.close()
             print("[upload_player] Cursor closed.")
@@ -92,8 +85,10 @@ def get_steam_summary(steam_id, steam_api_key: str):
                         avatar_hash = os.path.splitext(filename)[0]
                     return personaname, avatar_hash
             print(f"[upload_player] Failed to fetch Steam summary. Status={response.status}")
+
     except urllib.error.HTTPError as exc:
         print(f"[upload_player] Steam HTTP error. Status={exc.code}, Error={exc}")
+
     except urllib.error.URLError as exc:
         print(f"[upload_player] Steam request exception. Error={exc}")
 

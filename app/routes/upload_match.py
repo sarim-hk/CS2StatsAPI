@@ -5,7 +5,26 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.config import Settings, get_settings
-from app.database import transaction
+from app.database import (
+    fetch_team_average_elo,
+    insert_blind,
+    insert_clutch,
+    insert_death,
+    insert_duel,
+    insert_grenade,
+    insert_hurt,
+    insert_kast,
+    insert_map,
+    insert_match,
+    insert_player_match,
+    insert_round,
+    insert_team,
+    insert_team_player,
+    insert_team_result,
+    transaction,
+    update_team_elo,
+    update_team_players_elo,
+)
 
 router = APIRouter()
 
@@ -55,33 +74,14 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
         print("[upload_match] Transaction started.")
 
         try:
-            cursor.execute(
-                """
-                INSERT IGNORE INTO CS2S_Map (MapID)
-                VALUES (%s);
-                """,
-                (match_json["MapName"],),
-            )
+            insert_map(cursor, match_json["MapName"])
             print(f"[upload_match] Map inserted/confirmed. MapID={match_json['MapName']}")
 
-            cursor.execute(
-                """
-                INSERT INTO CS2S_Match (MapID, StartTick, EndTick)
-                VALUES (%s, %s, %s);
-                """,
-                (match_json["MapName"], match_json["StartTick"], match_json["EndTick"]),
-            )
-            match_id = cursor.lastrowid
+            match_id = insert_match(cursor, match_json["MapName"], match_json["StartTick"], match_json["EndTick"])
             print(f"[upload_match] Match inserted. MatchID={match_id}")
 
             for team in match_json["Teams"].values():
-                cursor.execute(
-                    """
-                    INSERT IGNORE INTO CS2S_Team (TeamID, Size, Name)
-                    VALUES (%s, %s, %s);
-                    """,
-                    (team["TeamID"], len(team["PlayerIDs"]), team["TeamName"]),
-                )
+                insert_team(cursor, team["TeamID"], len(team["PlayerIDs"]), team["TeamName"])
                 print(
                     "[upload_match] Team inserted/confirmed. "
                     f"TeamID={team['TeamID']}, Name={team['TeamName']}, Players={len(team['PlayerIDs'])}, "
@@ -90,13 +90,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
 
                 for player_id in team["PlayerIDs"]:
                     try:
-                        cursor.execute(
-                            """
-                            INSERT IGNORE INTO CS2S_Team_Players (TeamID, PlayerID)
-                            VALUES (%s, %s);
-                            """,
-                            (team["TeamID"], player_id),
-                        )
+                        insert_team_player(cursor, team["TeamID"], player_id)
                     except Exception as exc:
                         print(
                             "[upload_match] Team player insert failed. "
@@ -106,13 +100,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                     print(f"[upload_match] Team player inserted/confirmed. TeamID={team['TeamID']}, PlayerID={player_id}")
 
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Player_Matches (PlayerID, MatchID)
-                            VALUES (%s, %s);
-                            """,
-                            (player_id, match_id),
-                        )
+                        insert_player_match(cursor, player_id, match_id)
                     except Exception as exc:
                         print(
                             "[upload_match] Player match insert failed. "
@@ -121,51 +109,20 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                         raise
                     print(f"[upload_match] Player match inserted. MatchID={match_id}, PlayerID={player_id}")
 
-                cursor.execute(
-                    """
-                    SELECT AVG(p.ELO)
-                    FROM CS2S_PlayerInfo p
-                    INNER JOIN CS2S_Team_Players tp ON p.PlayerID = tp.PlayerID
-                    WHERE tp.TeamID = %s;
-                    """,
-                    (team["TeamID"],),
-                )
-                team["AverageELO"] = cursor.fetchone()[0] or 1000
+                team["AverageELO"] = fetch_team_average_elo(cursor, team["TeamID"]) or 1000
                 print(
                     "[upload_match] Team average Elo loaded. "
                     f"TeamID={team['TeamID']}, AverageELO={team['AverageELO']}, PlayerIDs={team['PlayerIDs']}"
                 )
 
             for round_index, match_round in enumerate(match_json["Rounds"], start=1):
-                cursor.execute(
-                    """
-                    INSERT INTO CS2S_Round (MatchID, WinnerTeamID, LoserTeamID, WinnerSide, LoserSide, RoundEndReason, StartTick, EndTick)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                    """,
-                    (
-                        match_id,
-                        match_round["WinningTeamID"],
-                        match_round["LosingTeamID"],
-                        match_round["WinningTeamNum"],
-                        match_round["LosingTeamNum"],
-                        match_round["WinningReason"],
-                        match_round["StartTick"],
-                        match_round["EndTick"],
-                    ),
-                )
-                round_id = cursor.lastrowid
+                round_id = insert_round(cursor, match_id, match_round)
                 print(f"[upload_match] Round inserted. RoundIndex={round_index}, RoundID={round_id}")
 
                 if match_round["ClutchEvent"]:
                     clutch = match_round["ClutchEvent"]
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Clutch (RoundID, MatchID, PlayerID, PlayerSide, EnemyCount, Result)
-                            VALUES (%s, %s, %s, %s, %s, %s);
-                            """,
-                            (round_id, match_id, clutch["ClutcherID"], clutch["ClutcherSide"], clutch["EnemyCount"], clutch["Result"]),
-                        )
+                        insert_clutch(cursor, round_id, match_id, clutch)
                     except Exception as exc:
                         print_insert_failure("Clutch", match_id, round_index, round_id, clutch, exc)
                         raise
@@ -176,13 +133,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                 if match_round["DuelEvent"]:
                     duel = match_round["DuelEvent"]
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Duel (RoundID, MatchID, WinnerID, WinnerSide, LoserID, LoserSide)
-                            VALUES (%s, %s, %s, %s, %s, %s);
-                            """,
-                            (round_id, match_id, duel["WinnerID"], duel["WinnerSide"], duel["LoserID"], duel["LoserSide"]),
-                        )
+                        insert_duel(cursor, round_id, match_id, duel)
                     except Exception as exc:
                         print_insert_failure("Duel", match_id, round_index, round_id, duel, exc)
                         raise
@@ -192,24 +143,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
 
                 for hurt in match_round["HurtEvents"]:
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Hurt (RoundID, MatchID, AttackerID, AttackerSide, VictimID, VictimSide, Damage, Weapon, Hitgroup, RoundTick)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                            """,
-                            (
-                                round_id,
-                                match_id,
-                                hurt["AttackerID"],
-                                hurt["AttackerSide"],
-                                hurt["VictimID"],
-                                hurt["VictimSide"],
-                                hurt["Damage"],
-                                hurt["Weapon"],
-                                hurt["Hitgroup"],
-                                hurt["RoundTick"],
-                            ),
-                        )
+                        insert_hurt(cursor, round_id, match_id, hurt)
                     except Exception as exc:
                         print_insert_failure("Hurt", match_id, round_index, round_id, hurt, exc)
                         raise
@@ -220,26 +154,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
 
                 for death in match_round["DeathEvents"]:
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Death (RoundID, MatchID, AttackerID, AttackerSide, AssisterID, AssisterSide, VictimID, VictimSide, Weapon, Hitgroup, OpeningDeath, RoundTick)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                            """,
-                            (
-                                round_id,
-                                match_id,
-                                death["AttackerID"],
-                                death["AttackerSide"],
-                                death["AssisterID"],
-                                death["AssisterSide"],
-                                death["VictimID"],
-                                death["VictimSide"],
-                                death["Weapon"],
-                                death["Hitgroup"],
-                                death["OpeningDeath"],
-                                death["RoundTick"],
-                            ),
-                        )
+                        insert_death(cursor, round_id, match_id, death)
                     except Exception as exc:
                         print_insert_failure("Death", match_id, round_index, round_id, death, exc)
                         raise
@@ -250,22 +165,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
 
                 for blind in match_round["BlindEvents"]:
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Blind (RoundID, MatchID, ThrowerID, ThrowerSide, BlindedID, BlindedSide, Duration, RoundTick)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                            """,
-                            (
-                                round_id,
-                                match_id,
-                                blind["ThrowerID"],
-                                blind["ThrowerSide"],
-                                blind["BlindedID"],
-                                blind["BlindedSide"],
-                                blind["Duration"],
-                                blind["RoundTick"],
-                            ),
-                        )
+                        insert_blind(cursor, round_id, match_id, blind)
                     except Exception as exc:
                         print_insert_failure("Blind", match_id, round_index, round_id, blind, exc)
                         raise
@@ -276,13 +176,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
 
                 for grenade in match_round["GrenadeEvents"]:
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_Grenade (RoundID, MatchID, ThrowerID, ThrowerSide, Weapon, RoundTick)
-                            VALUES (%s, %s, %s, %s, %s, %s);
-                            """,
-                            (round_id, match_id, grenade["ThrowerID"], grenade["ThrowerSide"], grenade["Weapon"], grenade["RoundTick"]),
-                        )
+                        insert_grenade(cursor, round_id, match_id, grenade)
                     except Exception as exc:
                         print_insert_failure("Grenade", match_id, round_index, round_id, grenade, exc)
                         raise
@@ -293,13 +187,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
 
                 for kast in match_round["KASTEvents"]:
                     try:
-                        cursor.execute(
-                            """
-                            INSERT INTO CS2S_KAST (RoundID, MatchID, PlayerID, PlayerSide)
-                            VALUES (%s, %s, %s, %s);
-                            """,
-                            (round_id, match_id, kast["PlayerID"], kast["PlayerSide"]),
-                        )
+                        insert_kast(cursor, round_id, match_id, kast)
                     except Exception as exc:
                         print_insert_failure("KAST", match_id, round_index, round_id, kast, exc)
                         raise
@@ -325,44 +213,23 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                 delta_elo = team.get("DeltaELO", 0)
                 side = team.get("Side", team.get("TeamNum"))
 
-                cursor.execute(
-                    """
-                    INSERT INTO CS2S_TeamResult (TeamID, MatchID, Score, Result, Side, DeltaELO)
-                    VALUES (%s, %s, %s, %s, %s, %s);
-                    """,
-                    (team["TeamID"], match_id, team["Score"], team["Result"], side, delta_elo),
-                )
+                insert_team_result(cursor, team["TeamID"], match_id, team["Score"], team["Result"], side, delta_elo)
                 print(
                     "[upload_match] Team result inserted. "
                     f"MatchID={match_id}, TeamID={team['TeamID']}, Result={team['Result']}, "
                     f"Score={team['Score']}, DeltaELO={delta_elo}, PlayerIDs={team['PlayerIDs']}"
                 )
 
-                cursor.execute(
-                    """
-                    UPDATE CS2S_Team
-                    SET ELO = ELO + %s
-                    WHERE TeamID = %s;
-                    """,
-                    (delta_elo, team["TeamID"]),
-                )
+                team_rows = update_team_elo(cursor, delta_elo, team["TeamID"])
                 print(
                     "[upload_match] Team Elo updated. "
-                    f"TeamID={team['TeamID']}, DeltaELO={delta_elo}, Rows={cursor.rowcount}, PlayerIDs={team['PlayerIDs']}"
+                    f"TeamID={team['TeamID']}, DeltaELO={delta_elo}, Rows={team_rows}, PlayerIDs={team['PlayerIDs']}"
                 )
 
-                cursor.execute(
-                    """
-                    UPDATE CS2S_PlayerInfo p
-                    JOIN CS2S_Team_Players tp ON p.PlayerID = tp.PlayerID
-                    SET p.ELO = p.ELO + %s
-                    WHERE tp.TeamID = %s;
-                    """,
-                    (delta_elo, team["TeamID"]),
-                )
+                player_rows = update_team_players_elo(cursor, delta_elo, team["TeamID"])
                 print(
                     "[upload_match] Player Elo updated. "
-                    f"TeamID={team['TeamID']}, DeltaELO={delta_elo}, Rows={cursor.rowcount}, PlayerIDs={team['PlayerIDs']}"
+                    f"TeamID={team['TeamID']}, DeltaELO={delta_elo}, Rows={player_rows}, PlayerIDs={team['PlayerIDs']}"
                 )
 
             print(f"[upload_match] Database writes finished. MatchID={match_id}. Committing transaction.")

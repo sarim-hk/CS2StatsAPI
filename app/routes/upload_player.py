@@ -11,10 +11,10 @@ from app.routes.upload_match import validate_authorization
 router = APIRouter()
 
 @router.post("/upload_player")
-async def upload_player(request: Request, settings: Settings = Depends(get_settings)):
+def upload_player(request: Request, settings: Settings = Depends(get_settings)):
 
     validate_authorization(request, settings.api_auth_key)
-    body = await request.body()
+    body = request.body()
     print(f"[upload_player] Request received. Bytes={len(body)}")
 
     try:
@@ -65,7 +65,7 @@ async def upload_player(request: Request, settings: Settings = Depends(get_setti
 
 def get_steam_summary(steam_id, steam_api_key: str):
     query = urllib.parse.urlencode({"key": steam_api_key, "steamids": steam_id})
-    url = f"http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?{query}"
+    url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?{query}"
 
     try:
         with urllib.request.urlopen(url, timeout=10) as response:

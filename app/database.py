@@ -881,11 +881,11 @@ def insert_player_info(cursor, player_id, username, avatar_hash):
         INSERT INTO CS2S_PlayerInfo
             (PlayerID, Username, AvatarHash)
         VALUES
-            (%s, %s, %s)
+            (%s, COALESCE(%s, DEFAULT(Username)), COALESCE(%s, DEFAULT(AvatarHash)))
         ON DUPLICATE KEY UPDATE
-            Username = VALUES(Username),
-            AvatarHash = VALUES(AvatarHash);
+            Username = COALESCE(%s, Username),
+            AvatarHash = COALESCE(%s, AvatarHash);
         """,
-        (player_id, username, avatar_hash),
+        (player_id, username, avatar_hash, username, avatar_hash),
     )
     return cursor.rowcount

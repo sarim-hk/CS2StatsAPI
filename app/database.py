@@ -302,7 +302,7 @@ def fetch_matches(db, player_id=None, map_name=None, page=None):
             SELECT
                 m.MatchID,
                 m.MapID,
-                DATE_FORMAT(m.MatchDate, '%a, %d %b %Y %H:%i:%s GMT') AS MatchDate,
+                m.MatchDate,
                 tr_w.TeamID AS WinningTeamID,
                 t_w.Name AS WinningTeamName,
                 tr_l.TeamID AS LosingTeamID,
@@ -348,7 +348,10 @@ def fetch_matches(db, player_id=None, map_name=None, page=None):
             per_page = 25
             query_params.extend([per_page, (page - 1) * per_page])
 
-        cursor.execute(query, tuple(query_params))
+        try:
+            cursor.execute(query, tuple(query_params))
+        except Exception as e:
+            print(e)
         return cursor.fetchall()
     finally:
         cursor.close()

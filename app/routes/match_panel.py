@@ -60,7 +60,6 @@ def match_panel(match_id: str = Query(...), db=Depends(get_db)):
         return build_match_response(match_data)
 
     except Error as e:
-        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch data.") from e
 
     finally:

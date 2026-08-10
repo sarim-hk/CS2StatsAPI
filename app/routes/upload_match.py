@@ -286,23 +286,13 @@ def print_insert_failure(event_name, match_id, round_index, round_id, event, e):
 
 def validate_authorization(request, expected_auth_key):
     if not expected_auth_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Upload auth key is not configured.",
-        )
+        raise HTTPException(status_code=500, detail="Upload auth key is not configured.")
 
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
 
     if scheme.lower() != "bearer" or not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing bearer token.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail="Missing bearer token.", headers={"WWW-Authenticate": "Bearer"})
 
     if not secrets.compare_digest(token, expected_auth_key):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid bearer token.",
-        )
+        raise HTTPException(status_code=403, detail="Invalid bearer token.")

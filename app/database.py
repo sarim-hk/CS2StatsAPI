@@ -311,13 +311,28 @@ def fetch_matches(db, player_id=None, map_name=None, page=None):
                 tr_l.Score AS LosingTeamScore,
                 tr_w.Side AS WinningSide,
                 tr_w.DeltaELO AS WinningDeltaELO,
-                tr_l.DeltaELO AS LosingDeltaELO
+                tr_l.DeltaELO AS LosingDeltaELO,
+                CASE
+                    WHEN tr_w.Result = 'Tie' THEN 'Tie'
+                    ELSE 'Win'
+                END AS MatchResult
             FROM
                 CS2S_Match m
             JOIN
-                CS2S_TeamResult tr_w ON m.MatchID = tr_w.MatchID AND tr_w.Result = 'Win'
+                CS2S_TeamResult tr_w
+                    ON m.MatchID = tr_w.MatchID
+                    AND tr_w.Result IN ('Win', 'Tie')
             JOIN
-                CS2S_TeamResult tr_l ON m.MatchID = tr_l.MatchID AND tr_l.Result = 'Loss'
+                CS2S_TeamResult tr_l
+                    ON m.MatchID = tr_l.MatchID
+                    AND (
+                        (tr_w.Result = 'Win' AND tr_l.Result = 'Loss')
+                        OR (
+                            tr_w.Result = 'Tie'
+                            AND tr_l.Result = 'Tie'
+                            AND tr_w.TeamID < tr_l.TeamID
+                        )
+                    )
             JOIN
                 CS2S_Team t_w ON tr_w.TeamID = t_w.TeamID
             JOIN

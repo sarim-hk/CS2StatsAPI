@@ -11,7 +11,6 @@ def create_db_connection(settings):
     )
 
 def create_tables(settings=None):
-
     CREATE_TABLES_SQL = """
     CREATE TABLE IF NOT EXISTS CS2S_Map (
         MapID varchar(128) PRIMARY KEY NOT NULL

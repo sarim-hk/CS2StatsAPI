@@ -41,13 +41,10 @@ def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Quer
     player_ids = [pid for pid in player_ids if pid]
 
     if not player_ids:
-        raise HTTPException(status_code=400, detail="No valid player IDs provided")
+        raise HTTPException(status_code=400, detail="No valid player IDs provided.")
 
     if range_filter not in date_ranges and range_filter not in match_ranges:
-        raise HTTPException(
-            status_code=400,
-            detail=f"range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}",
-        )
+        raise HTTPException(status_code=400, detail=f"Range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}")
 
     cursor = None
     try:
@@ -95,13 +92,7 @@ def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Quer
         if isinstance(e, HTTPException):
             raise
 
-        error_message = str(e)
-        error_traceback = traceback.format_exc()
-
-        raise HTTPException(
-            status_code=500,
-            detail={"error": error_message, "traceback": error_traceback},
-        ) from e
+        raise HTTPException(status_code=500, detail="An internal server error occurred.") from e
 
     finally:
         if cursor:

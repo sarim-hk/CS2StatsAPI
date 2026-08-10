@@ -9,7 +9,7 @@ def playerelo_panel(player_id = Query(...), db = Depends(get_db)):
         results = fetch_player_elo_history(db, player_id)
 
         if not results:
-            raise HTTPException(status_code=404, detail="No data found for the given Player ID")
+            raise HTTPException(status_code=404, detail="No data found for the given Player ID.")
 
         current_elo = results[0]["CurrentELO"]
         calculated_elo = current_elo

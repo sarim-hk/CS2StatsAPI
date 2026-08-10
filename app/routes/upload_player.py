@@ -11,10 +11,10 @@ from app.routes.upload_match import validate_authorization
 router = APIRouter()
 
 @router.post("/upload_player")
-def upload_player(request: Request, settings: Settings = Depends(get_settings)):
+async def upload_player(request: Request, settings: Settings = Depends(get_settings)):
 
     validate_authorization(request, settings.api_auth_key)
-    body = request.body()
+    body = await request.body()
     print(f"[upload_player] Request received. Bytes={len(body)}")
 
     try:

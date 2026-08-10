@@ -40,10 +40,10 @@ PLAYER_ID_FIELDS = (
 )
 
 @router.post("/upload_match")
-def upload_match(request: Request, settings: Settings = Depends(get_settings)):
+async def upload_match(request: Request, settings: Settings = Depends(get_settings)):
 
     validate_authorization(request, settings.api_auth_key)
-    body = request.body()
+    body = await request.body()
     print(f"[upload_match] Request received. Bytes={len(body)}, encoding={request.headers.get('content-encoding', 'none')}")
 
     if request.headers.get("content-encoding", "").lower() == "gzip":

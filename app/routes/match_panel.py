@@ -104,7 +104,8 @@ def aggregate_player_stats(match_data):
         victim_id = death["VictimID"]
         attacker_id = death["AttackerID"]
         assister_id = death["AssisterID"]
-        attacker_side = opposing_side(death["VictimSide"])
+        attacker_side = event_player_side(death, "AttackerSide")
+        assister_side = event_player_side(death, "AssisterSide", fallback_side=attacker_side)
 
         victim_stats = _get_or_create_player_stats(players_stats, victim_id)
         victim_stats["Overall"]["Deaths"] += 1
@@ -127,7 +128,7 @@ def aggregate_player_stats(match_data):
         if assister_id:
             assister_stats = _get_or_create_player_stats(players_stats, assister_id)
             assister_stats["Overall"]["Assists"] += 1
-            assister_side_stats = _side_stats(assister_stats, attacker_side)
+            assister_side_stats = _side_stats(assister_stats, assister_side)
             if assister_side_stats:
                 assister_side_stats["Assists"] += 1
 
@@ -137,7 +138,7 @@ def aggregate_player_stats(match_data):
             continue
 
         stats = _get_or_create_player_stats(players_stats, attacker_id)
-        attacker_side = opposing_side(damage["VictimSide"])
+        attacker_side = event_player_side(damage, "AttackerSide")
         amount = damage["Damage"]
         is_utility = damage["Weapon"] in UTILITY_WEAPONS
 
@@ -290,6 +291,14 @@ def _side_stats(stats, side):
     if side == 3:
         return stats["CounterTerrorist"]
     return None
+
+def event_player_side(event, side_key, fallback_side=None):
+    side = event.get(side_key)
+    if side is not None:
+        return side
+    if fallback_side is not None:
+        return fallback_side
+    return opposing_side(event.get("VictimSide"))
 
 def opposing_side(victim_side):
     if victim_side == 2:

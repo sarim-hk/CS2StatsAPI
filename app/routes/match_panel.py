@@ -14,10 +14,10 @@ from app.database import (
     fetch_team_results_for_match,
     get_db,
 )
+from app.utils.stats import UTILITY_WEAPONS, apply_derived_stats
 
 router = APIRouter()
 
-UTILITY_WEAPONS = {"smokegrenade", "molotov", "inferno", "hegrenade", "flashbang", "decoy"}
 SIDES = ("Overall", "Terrorist", "CounterTerrorist")
 
 class MatchData:
@@ -161,9 +161,9 @@ def apply_player_info_and_derived_stats(players_stats, match_data):
         t_rounds = player_side_rounds.get(player_id, {}).get("2", 0)
         ct_rounds = player_side_rounds.get(player_id, {}).get("3", 0)
 
-        _calculate_derived_stats(stats["Overall"], t_rounds + ct_rounds)
-        _calculate_derived_stats(stats["Terrorist"], t_rounds)
-        _calculate_derived_stats(stats["CounterTerrorist"], ct_rounds)
+        apply_derived_stats(stats["Overall"], t_rounds + ct_rounds, rounds_key="Rounds", zero_value=0.0)
+        apply_derived_stats(stats["Terrorist"], t_rounds, rounds_key="Rounds", zero_value=0.0)
+        apply_derived_stats(stats["CounterTerrorist"], ct_rounds, rounds_key="Rounds", zero_value=0.0)
 
 def calculate_player_side_rounds(rounds, player_teams):
     player_side_rounds = {}
@@ -316,50 +316,3 @@ def _add_damage(stats, amount, is_utility):
     if is_utility:
         stats["UtilityDamage"] += amount
 
-def calculate_impact_and_rating(kpr, apr, dpr, kast, adr):
-    kpr, apr, dpr, kast, adr = float(kpr), float(apr), float(dpr), float(kast), float(adr)
-    impact = ((2.13 * kpr) + (0.42 * apr) - 0.41) or 0.0
-    rating = (
-        (0.0073 * kast)
-        + (0.3591 * kpr)
-        + (-0.5329 * dpr)
-        + (0.2372 * impact)
-        + (0.0032 * adr)
-        + 0.1587
-    ) or 0.0
-    return impact, rating
-
-def _calculate_derived_stats(stats, total_rounds):
-    if total_rounds > 0:
-        total_rounds_fl = float(total_rounds)
-        stats["Rounds"] = total_rounds
-        stats["KAST"] = (float(stats["KAST"]) / total_rounds_fl) * 100.0
-        stats["KPR"] = float(stats["Kills"]) / total_rounds_fl
-        stats["APR"] = float(stats["Assists"]) / total_rounds_fl
-        stats["DPR"] = float(stats["Deaths"]) / total_rounds_fl
-        stats["ADR"] = float(stats["Damage"]) / total_rounds_fl
-
-        stats["Impact"], stats["Rating"] = calculate_impact_and_rating(
-            stats["KPR"],
-            stats["APR"],
-            stats["DPR"],
-            stats["KAST"],
-            stats["ADR"],
-        )
-
-        stats["KAST"] = round(stats["KAST"], 2) or 0.0
-        stats["KPR"] = round(stats["KPR"], 2) or 0.0
-        stats["APR"] = round(stats["APR"], 2) or 0.0
-        stats["DPR"] = round(stats["DPR"], 2) or 0.0
-        stats["ADR"] = round(stats["ADR"], 2) or 0.0
-        stats["Impact"] = round(stats["Impact"], 2) or 0.0
-        stats["Rating"] = round(stats["Rating"], 2) or 0.0
-    else:
-        stats["Rounds"] = 0.0
-        stats["KAST"] = 0.0
-        stats["KPR"] = 0.0
-        stats["APR"] = 0.0
-        stats["DPR"] = 0.0
-        stats["ADR"] = 0.0
-        stats["Impact"] = 0.0
-        stats["Rating"] = 0.0

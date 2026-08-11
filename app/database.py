@@ -172,26 +172,6 @@ def create_tables(settings=None):
         FOREIGN KEY (LoserID) REFERENCES CS2S_PlayerInfo(PlayerID)
     );
 
-    CREATE TABLE IF NOT EXISTS CS2S_LivePlayers (
-        PlayerID bigint NOT NULL,
-        Kills int DEFAULT 0 NOT NULL,
-        Assists int UNSIGNED DEFAULT 0 NOT NULL,
-        Deaths int UNSIGNED DEFAULT 0 NOT NULL,
-        ADR float UNSIGNED DEFAULT 0 NOT NULL,
-        Health smallint UNSIGNED DEFAULT 0 NOT NULL,
-        Money int UNSIGNED DEFAULT 0 NOT NULL,
-        Side tinyint UNSIGNED NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS CS2S_LiveStatus (
-        StaticID int PRIMARY KEY,
-        MapID varchar(128),
-        BombStatus tinyint UNSIGNED,
-        TScore smallint UNSIGNED,
-        CTScore smallint UNSIGNED,
-        InsertDate datetime DEFAULT CURRENT_TIMESTAMP
-    );
-
     CREATE TABLE IF NOT EXISTS CS2S_Team_Players (
         TeamID varchar(32) NOT NULL,
         PlayerID bigint UNSIGNED NOT NULL,

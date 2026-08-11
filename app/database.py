@@ -208,15 +208,6 @@ def create_tables(settings=None):
         FOREIGN KEY (MatchID) REFERENCES CS2S_Match(MatchID)
     );
 
-    CREATE TABLE IF NOT EXISTS CS2S_PlayerOfTheWeek (
-        PlayerID bigint UNSIGNED NOT NULL,
-        WeekPosition smallint UNSIGNED DEFAULT 0 NOT NULL,
-        BaseRating float DEFAULT 0 NOT NULL,
-        WeekRating float DEFAULT 0 NOT NULL,
-        RatingDelta float DEFAULT 0 NOT NULL,
-        PRIMARY KEY (PlayerID),
-        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID)
-    );
     """
 
     db = create_db_connection(settings or get_settings())
@@ -394,12 +385,8 @@ def fetch_player_panel(db, player_id):
     try:
         cursor.execute(
             f"""
-            SELECT
-                {player_info_select_sql("p")},
-                pow.WeekPosition
+            SELECT {player_info_select_sql("p")}
             FROM CS2S_PlayerInfo p
-            LEFT JOIN CS2S_PlayerOfTheWeek pow
-                ON p.PlayerID = pow.PlayerID
             WHERE p.PlayerID = %s
             """,
             (player_id,),

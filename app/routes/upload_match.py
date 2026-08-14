@@ -2,7 +2,8 @@ import gzip
 import json
 import math
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.routines.calculate_player_rating import refresh_player_ratings_for_db
 from app.config import Settings, get_settings
 from app.database import (
     fetch_team_average_elo,
@@ -109,10 +110,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                     print(f"[upload_match] Player match inserted. MatchID={match_id}, PlayerID={player_id}")
 
                 team["AverageELO"] = fetch_team_average_elo(cursor, team["TeamID"]) or 1000
-                print(
-                    "[upload_match] Team average Elo loaded. "
-                    f"TeamID={team['TeamID']}, AverageELO={team['AverageELO']}, PlayerIDs={team['PlayerIDs']}"
-                )
+                print("[upload_match] Team average Elo loaded." f"TeamID={team['TeamID']}, AverageELO={team['AverageELO']}, PlayerIDs={team['PlayerIDs']}")
 
             for round_index, match_round in enumerate(match_json["Rounds"], start=1):
                 round_id = insert_round(cursor, match_id, match_round)
@@ -230,6 +228,12 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                     "[upload_match] Player Elo updated. "
                     f"TeamID={team['TeamID']}, DeltaELO={delta_elo}, Rows={player_rows}, PlayerIDs={team['PlayerIDs']}"
                 )
+
+            try:
+                refresh_player_ratings_for_db(db, range_days=90)
+            except Exception as e:
+                print(f"[upload_match] Error while refreshing player ratings. MatchID={locals().get('match_id', 'not-created')}, Error={e}")
+                raise
 
             print(f"[upload_match] Database writes finished. MatchID={match_id}. Committing transaction.")
         except Exception as e:

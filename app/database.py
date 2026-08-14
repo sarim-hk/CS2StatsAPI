@@ -172,6 +172,24 @@ def create_tables(settings=None):
         FOREIGN KEY (LoserID) REFERENCES CS2S_PlayerInfo(PlayerID)
     );
 
+    CREATE TABLE IF NOT EXISTS CS2S_PlayerRating (
+        PlayerRatingID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
+        PlayerID bigint UNSIGNED NOT NULL,
+        RangeDays int UNSIGNED NOT NULL,
+        Side tinyint UNSIGNED NOT NULL,
+        MatchesPlayed int UNSIGNED NOT NULL DEFAULT 0,
+        RoundsPlayed int UNSIGNED NOT NULL DEFAULT 0,
+        RoundsKAST int UNSIGNED NOT NULL DEFAULT 0,
+        Kills int UNSIGNED NOT NULL DEFAULT 0,
+        Assists int UNSIGNED NOT NULL DEFAULT 0,
+        Deaths int UNSIGNED NOT NULL DEFAULT 0,
+        Damage int UNSIGNED NOT NULL DEFAULT 0,
+        Rating decimal(5,2) NOT NULL DEFAULT 0,
+        UpdateDate datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (PlayerID) REFERENCES CS2S_PlayerInfo(PlayerID),
+        UNIQUE KEY uq_player_rating (PlayerID, Side, RangeDays)
+    );
+
     CREATE TABLE IF NOT EXISTS CS2S_Team_Players (
         TeamID varchar(32) NOT NULL,
         PlayerID bigint UNSIGNED NOT NULL,

@@ -398,9 +398,18 @@ def fetch_players_panel(db):
     try:
         cursor.execute(
             f"""
-            SELECT {player_info_select_sql("p")}
+            SELECT
+                {player_info_select_sql("p")},
+                pr.Rating AS Rating,
+                pr.UpdateDate AS RatingUpdateDate,
+                pr.MatchesPlayed as MatchesPlayed
             FROM CS2S_PlayerInfo p
-            JOIN CS2S_Player_Matches pm ON p.PlayerID = pm.PlayerID
+            JOIN CS2S_Player_Matches pm
+                ON p.PlayerID = pm.PlayerID
+            LEFT JOIN CS2S_PlayerRating pr
+                ON pr.PlayerID = p.PlayerID
+                AND pr.RangeDays = 90
+                AND pr.Side = 0
             GROUP BY p.PlayerID
             HAVING COUNT(pm.MatchID) > 0
             ORDER BY p.ELO DESC

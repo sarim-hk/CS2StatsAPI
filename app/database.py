@@ -498,16 +498,31 @@ def fetch_player_panel(db, team_id):
     finally:
         cursor.close()
 
-def fetch_players_panel(db):
+def fetch_players_panel(db, team_id=None):
     cursor = db.cursor(dictionary=True)
+
     try:
+        where_sql = ""
+        query_params = []
+
+        if team_id is not None:
+            where_sql = """
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM CS2S_Team_Players tp
+                    WHERE tp.PlayerID = p.PlayerID
+                      AND tp.TeamID = %s
+                )
+            """
+            query_params.append(team_id)
+
         cursor.execute(
             f"""
             SELECT
                 {player_info_select_sql("p")},
                 pr.Rating AS Rating,
                 pr.UpdateDate AS RatingUpdateDate,
-                pr.MatchesPlayed as MatchesPlayed
+                pr.MatchesPlayed AS MatchesPlayed
             FROM CS2S_PlayerInfo p
             JOIN CS2S_Player_Matches pm
                 ON p.PlayerID = pm.PlayerID
@@ -515,12 +530,16 @@ def fetch_players_panel(db):
                 ON pr.PlayerID = p.PlayerID
                 AND pr.RangeDays = 90
                 AND pr.Side = 0
+            {where_sql}
             GROUP BY p.PlayerID
             HAVING COUNT(pm.MatchID) > 0
             ORDER BY p.ELO DESC
-            """
+            """,
+            tuple(query_params),
         )
+
         return cursor.fetchall()
+
     finally:
         cursor.close()
 

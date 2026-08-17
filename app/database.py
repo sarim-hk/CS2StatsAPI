@@ -376,6 +376,47 @@ def fetch_team_elo_history(db, team_id):
     finally:
         cursor.close()
 
+def fetch_team_panel(db, team_id):
+    cursor = db.cursor(dictionary=True)
+    try:
+        # goyslop query to try match team name to player but doesnt work if player name changes
+        # otherwise falls back to biggest player id
+        # in future need to set a team "leader" on plugin side that is stored so we know which player avatar to use on frontend
+        cursor.execute(
+            f"""
+            SELECT
+                t.TeamID,
+                t.Name AS TeamName,
+                t.ELO,
+                {avatar_url_sql("p")} AS AvatarS,
+                {avatar_url_sql("p", "medium")} AS AvatarM,
+                {avatar_url_sql("p", "full")} AS AvatarL
+            FROM CS2S_Team t
+            LEFT JOIN CS2S_PlayerInfo p
+                ON p.PlayerID = (
+                    SELECT tp.PlayerID
+                    FROM CS2S_Team_Players tp
+                    JOIN CS2S_PlayerInfo pp
+                        ON pp.PlayerID = tp.PlayerID
+                    WHERE tp.TeamID = t.TeamID
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(pp.Username) = LOWER(
+                                SUBSTRING(t.Name, 6)
+                            ) THEN 0
+                            ELSE 1
+                        END,
+                        tp.PlayerID DESC
+                    LIMIT 1
+                )
+            WHERE t.TeamID = %s
+            """,
+            (team_id,),
+        )
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+
 def fetch_player_elo_history(db, player_id):
     cursor = db.cursor(dictionary=True)
     try:
@@ -409,7 +450,7 @@ def fetch_player_elo_history(db, player_id):
     finally:
         cursor.close()
 
-def fetch_player_panel(db, player_id):
+def fetch_player_panel(db, team_id):
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
@@ -418,7 +459,7 @@ def fetch_player_panel(db, player_id):
             FROM CS2S_PlayerInfo p
             WHERE p.PlayerID = %s
             """,
-            (player_id,),
+            (team_id,),
         )
         return cursor.fetchone()
     finally:

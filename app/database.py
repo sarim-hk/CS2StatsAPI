@@ -268,7 +268,7 @@ def player_info_select_sql(alias="p"):
         {avatar_url_sql(alias, "full")} AS AvatarL
     """
 
-def fetch_matches(db, player_id=None, map_name=None, page=None):
+def fetch_matches(db, player_id=None, team_id=None, map_name=None, page=None):
     cursor = db.cursor(dictionary=True)
     try:
         joins = []
@@ -279,6 +279,11 @@ def fetch_matches(db, player_id=None, map_name=None, page=None):
             joins.append("JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID")
             filters.append("pm.PlayerID = %s")
             query_params.append(player_id)
+
+        if team_id is not None:
+            joins.append("JOIN CS2S_TeamResult tr ON m.MatchID = tr.MatchID")
+            filters.append("tr.TeamID = %s")
+            query_params.append(team_id)
 
         if map_name is not None:
             filters.append("m.MapID = %s")

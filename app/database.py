@@ -268,7 +268,7 @@ def player_info_select_sql(alias="p"):
         {avatar_url_sql(alias, "full")} AS AvatarL
     """
 
-def fetch_matches(db, player_id=None, team_id=None, map_name=None, page=None):
+def fetch_matches(db, player_id=None, team_id=None, map_name=None):
     cursor = db.cursor(dictionary=True)
     try:
         joins = []
@@ -335,18 +335,11 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None, page=None):
             {where_sql}
             ORDER BY
                 m.MatchID DESC
-            {" LIMIT %s OFFSET %s" if page is not None else ""}
         """
 
-        if page is not None:
-            per_page = 25
-            query_params.extend([per_page, (page - 1) * per_page])
-
-        try:
-            cursor.execute(query, tuple(query_params))
-        except Exception as e:
-            print(e)
+        cursor.execute(query, tuple(query_params))
         return cursor.fetchall()
+
     finally:
         cursor.close()
 

@@ -350,6 +350,32 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None, page=None):
     finally:
         cursor.close()
 
+def fetch_team_elo_history(db, team_id):
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                t.TeamID,
+                t.ELO AS CurrentELO,
+                tr.MatchID,
+                tr.DeltaELO
+            FROM
+                CS2S_Team t
+            JOIN
+                CS2S_TeamResult tr ON t.TeamID = tr.TeamID
+            WHERE
+                t.TeamID = %s
+            ORDER BY
+                tr.MatchID DESC
+            LIMIT 10
+            """,
+            (team_id,),
+        )
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+
 def fetch_player_elo_history(db, player_id):
     cursor = db.cursor(dictionary=True)
     try:

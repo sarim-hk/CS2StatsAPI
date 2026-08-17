@@ -282,7 +282,7 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
             filters.append("pm.PlayerID = %s")
             query_params.append(player_id)
 
-        if team_id is not None:
+        elif team_id is not None:
             joins.append(
                 "JOIN CS2S_TeamResult tr ON m.MatchID = tr.MatchID"
             )

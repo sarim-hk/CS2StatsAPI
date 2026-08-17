@@ -276,12 +276,16 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
         query_params = []
 
         if player_id is not None:
-            joins.append("JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID")
+            joins.append(
+                "JOIN CS2S_Player_Matches pm ON m.MatchID = pm.MatchID"
+            )
             filters.append("pm.PlayerID = %s")
             query_params.append(player_id)
 
         if team_id is not None:
-            joins.append("JOIN CS2S_TeamResult tr ON m.MatchID = tr.MatchID")
+            joins.append(
+                "JOIN CS2S_TeamResult tr ON m.MatchID = tr.MatchID"
+            )
             filters.append("tr.TeamID = %s")
             query_params.append(team_id)
 
@@ -291,6 +295,38 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
 
         join_sql = "\n".join(joins)
         where_sql = f"WHERE {' AND '.join(filters)}" if filters else ""
+
+        # Determine which team the requested player belongs to.
+        if player_id is not None:
+            match_result = """
+                CASE
+                    WHEN tr_w.Result = 'Tie' THEN 'Tie'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM CS2S_Team_Players tp
+                        WHERE tp.PlayerID = %s
+                          AND tp.TeamID = tr_w.TeamID
+                    ) THEN 'Win'
+                    ELSE 'Loss'
+                END AS MatchResult
+            """
+            match_result_params = [player_id]
+
+        elif team_id is not None:
+            match_result = """
+                CASE
+                    WHEN tr_w.Result = 'Tie' THEN 'Tie'
+                    WHEN tr_w.TeamID = %s THEN 'Win'
+                    ELSE 'Loss'
+                END AS MatchResult
+            """
+            match_result_params = [team_id]
+
+        else:
+            match_result = """
+                NULL AS MatchResult
+            """
+            match_result_params = []
 
         query = f"""
             SELECT
@@ -306,10 +342,7 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
                 tr_w.Side AS WinningSide,
                 tr_w.DeltaELO AS WinningDeltaELO,
                 tr_l.DeltaELO AS LosingDeltaELO,
-                CASE
-                    WHEN tr_w.Result = 'Tie' THEN 'Tie'
-                    ELSE 'Win'
-                END AS MatchResult
+                {match_result}
             FROM
                 CS2S_Match m
             JOIN
@@ -328,16 +361,23 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
                         )
                     )
             JOIN
-                CS2S_Team t_w ON tr_w.TeamID = t_w.TeamID
+                CS2S_Team t_w
+                    ON tr_w.TeamID = t_w.TeamID
             JOIN
-                CS2S_Team t_l ON tr_l.TeamID = t_l.TeamID
+                CS2S_Team t_l
+                    ON tr_l.TeamID = t_l.TeamID
             {join_sql}
             {where_sql}
             ORDER BY
                 m.MatchID DESC
         """
 
-        cursor.execute(query, tuple(query_params))
+        # MatchResult's parameter comes before the WHERE parameters
+        cursor.execute(
+            query,
+            tuple(match_result_params + query_params)
+        )
+
         return cursor.fetchall()
 
     finally:

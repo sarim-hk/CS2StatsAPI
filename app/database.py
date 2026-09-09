@@ -460,11 +460,24 @@ def fetch_team_panel(db, team_id):
     finally:
         cursor.close()
 
-def fetch_player_elo_history(db, player_id):
+def fetch_player_elo_history(db, player_id, start_date=None, end_date=None):
     cursor = db.cursor(dictionary=True)
     try:
+        date_filters = []
+        query_params = [player_id]
+
+        if start_date is not None:
+            date_filters.append("m.MatchDate >= %s")
+            query_params.append(start_date)
+
+        if end_date is not None:
+            date_filters.append("m.MatchDate < %s")
+            query_params.append(end_date)
+
+        date_filter_sql = "\n                AND " + "\n                AND ".join(date_filters) if date_filters else ""
+
         cursor.execute(
-            """
+            f"""
             SELECT
                 p.PlayerID,
                 p.ELO AS CurrentELO,
@@ -476,6 +489,8 @@ def fetch_player_elo_history(db, player_id):
                 CS2S_Player_Matches pm ON p.PlayerID = pm.PlayerID
             JOIN
                 CS2S_TeamResult tr ON pm.MatchID = tr.MatchID
+            JOIN
+                CS2S_Match m ON pm.MatchID = m.MatchID
             WHERE
                 tr.TeamID IN (
                     SELECT TeamID
@@ -483,11 +498,11 @@ def fetch_player_elo_history(db, player_id):
                     WHERE PlayerID = p.PlayerID
                 )
                 AND p.PlayerID = %s
+                {date_filter_sql}
             ORDER BY
                 tr.MatchID DESC
-            LIMIT 10
             """,
-            (player_id,),
+            query_params,
         )
         return cursor.fetchall()
     finally:

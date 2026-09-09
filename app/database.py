@@ -269,7 +269,7 @@ def player_info_select_sql(alias="p"):
     """
 
 def fetch_matches(db, player_id=None, team_id=None, map_name=None,
-                  start_date=None, match_limit=None):
+                  start_date=None, end_date=None):
     cursor = db.cursor(dictionary=True)
     try:
         joins = []
@@ -297,6 +297,10 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None,
         if start_date is not None:
             filters.append("m.MatchDate >= %s")
             query_params.append(start_date)
+
+        if end_date is not None:
+            filters.append("m.MatchDate < %s")
+            query_params.append(end_date)
 
         join_sql = "\n".join(joins)
         where_sql = f"WHERE {' AND '.join(filters)}" if filters else ""
@@ -377,9 +381,6 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None,
                 m.MatchID DESC
         """
 
-        if match_limit is not None:
-            query += "\nLIMIT %s"
-            query_params.append(match_limit)
 
         # MatchResult's parameter comes before the WHERE parameters
         cursor.execute(
@@ -675,13 +676,15 @@ def fetch_match_results_match_range(cursor, range_size, player_ids, map_id=None)
     cursor.execute(query, params)
     return cursor.fetchall()
 
-def fetch_match_results_date_range(cursor, start_date, player_ids, map_id=None):
+def fetch_match_results_date_range(cursor, start_date, player_ids, map_id=None,
+                                   end_date=None):
     player_id_placeholders = _placeholders(player_ids)
     query = f"""
     WITH DateRangeMatches AS (
         SELECT MatchID, MatchDate
         FROM CS2S_Match
         WHERE MatchDate >= %s
+          {'' if end_date is None else 'AND MatchDate < %s'}
           {'' if map_id is None else 'AND MapID = %s'}
     )
     SELECT
@@ -695,10 +698,12 @@ def fetch_match_results_date_range(cursor, start_date, player_ids, map_id=None):
       AND tp.PlayerID IN ({player_id_placeholders})
     GROUP BY pm.MatchID, tr.Result
     """
+    params = [start_date]
+    if end_date is not None:
+        params.append(end_date)
     if map_id is not None:
-        params = (start_date, map_id, *player_ids, *player_ids)
-    else:
-        params = (start_date, *player_ids, *player_ids)
+        params.append(map_id)
+    params.extend((*player_ids, *player_ids))
 
     cursor.execute(query, params)
     return cursor.fetchall()

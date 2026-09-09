@@ -17,38 +17,17 @@ from app.utils.stats import (
     empty_player_stats,
 )
 
-date_ranges = {
-    "7days": timedelta(days=7),
-    "14days": timedelta(days=14),
-    "1month": timedelta(days=30),
-    "3months": timedelta(days=90),
-    "6months": timedelta(days=180),
-    "1year": timedelta(days=365),
-    "overall": timedelta(weeks=9999)
-}
-
-match_ranges = {
-    "5matches": 5,
-    "10matches": 10,
-    "15matches": 15,
-    "20matches": 20,
-    "25matches": 25,
-    "50matches": 50,
-    "100matches": 100,
-}
-
 router = APIRouter()
 
 @router.get("/playerstats_panel")
-def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Query("overall", alias="range"), db=Depends(get_db)):
+def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Query(None, alias="range"), db=Depends(get_db)):
     player_ids = [pid.strip() for pid in player_id.split(",")]
     player_ids = [pid for pid in player_ids if pid]
 
     if not player_ids:
         raise HTTPException(status_code=400, detail="No valid player IDs provided.")
 
-    if range_filter not in date_ranges and range_filter not in match_ranges:
-        raise HTTPException(status_code=400, detail=f"Range is not valid: {list(date_ranges.keys())} , {list(match_ranges.keys())}")
+    date_range = parse_date_range(range_filter)
 
     cursor = None
     try:
@@ -56,10 +35,7 @@ def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Quer
         all_player_stats = {}
 
         for player_id in player_ids:
-            if range_filter in date_ranges:
-                results = get_match_results_date_range(cursor, range_filter, [player_id], map_id)
-            else:
-                results = get_match_results_match_range(cursor, range_filter, [player_id], map_id)
+            results = get_match_results_date_range(cursor, date_range, [player_id], map_id)
 
             if not results:
                 all_player_stats[player_id] = {
@@ -102,14 +78,24 @@ def playerstats_panel(player_id = Query(...), map_id = None, range_filter = Quer
         if cursor:
             cursor.close()
 
-def get_match_results_match_range(cursor, range_filter, player_ids, map_id=None):
-    match_range = match_ranges[range_filter]
-    return db_fetch_match_results_match_range(cursor, match_range, player_ids, map_id)
+def parse_date_range(range_filter):
+    if not range_filter:
+        return None
+    try:
+        start, end = [datetime.strptime(value, "%Y-%m-%d") for value in range_filter.split(",")]
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Range must be YYYY-MM-DD,YYYY-MM-DD.")
+    if start > end:
+        raise HTTPException(status_code=400, detail="Range start date must not be after the end date.")
+    return start, end + timedelta(days=1)
 
-def get_match_results_date_range(cursor, range_filter, player_ids, map_id=None):
-    start_date = datetime.now() - date_ranges[range_filter]
-    start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-    return db_fetch_match_results_date_range(cursor, start_date_str, player_ids, map_id)
+def get_match_results_date_range(cursor, date_range, player_ids, map_id=None):
+    if date_range is None:
+        start_date = "1000-01-01"
+        end_date = "9999-12-31"
+    else:
+        start_date, end_date = date_range
+    return db_fetch_match_results_date_range(cursor, start_date, player_ids, map_id, end_date)
 
 def get_split_round_ids_from_match_ids(cursor, match_ids, player_id):
     rounds = fetch_round_sides_for_player_matches(cursor, match_ids, player_id)

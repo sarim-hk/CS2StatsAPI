@@ -268,7 +268,8 @@ def player_info_select_sql(alias="p"):
         {avatar_url_sql(alias, "full")} AS AvatarL
     """
 
-def fetch_matches(db, player_id=None, team_id=None, map_name=None):
+def fetch_matches(db, player_id=None, team_id=None, map_name=None,
+                  start_date=None, match_limit=None):
     cursor = db.cursor(dictionary=True)
     try:
         joins = []
@@ -292,6 +293,10 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
         if map_name is not None:
             filters.append("m.MapID = %s")
             query_params.append(map_name)
+
+        if start_date is not None:
+            filters.append("m.MatchDate >= %s")
+            query_params.append(start_date)
 
         join_sql = "\n".join(joins)
         where_sql = f"WHERE {' AND '.join(filters)}" if filters else ""
@@ -371,6 +376,10 @@ def fetch_matches(db, player_id=None, team_id=None, map_name=None):
             ORDER BY
                 m.MatchID DESC
         """
+
+        if match_limit is not None:
+            query += "\nLIMIT %s"
+            query_params.append(match_limit)
 
         # MatchResult's parameter comes before the WHERE parameters
         cursor.execute(

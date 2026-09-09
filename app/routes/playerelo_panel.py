@@ -10,10 +10,7 @@ def playerelo_panel(player_id=Query(...),
                     db=Depends(get_db)):
     try:
         date_range = parse_date_range(range_filter)
-        start_date, end_date = date_range or (None, None)
-        results = fetch_player_elo_history(
-            db, player_id, start_date=start_date, end_date=end_date
-        )
+        results = fetch_player_elo_history(db, player_id)
 
         if not results:
             raise HTTPException(status_code=404, detail="No data found for the given Player ID.")
@@ -23,14 +20,26 @@ def playerelo_panel(player_id=Query(...),
         elo_history = []
 
         for match in results:
-            calculated_elo -= match["DeltaELO"]
-            elo_history.append(
-                {
-                    "MatchID": match["MatchID"],
-                    "DeltaELO": match["DeltaELO"],
-                    "ELOBeforeMatch": calculated_elo,
-                }
-            )
+            elo_before_match = calculated_elo - match["DeltaELO"]
+
+            if date_range is None or (
+                date_range[0] <= match["MatchDate"] < date_range[1]
+            ):
+                elo_history.append(
+                    {
+                        "MatchID": match["MatchID"],
+                        "DeltaELO": match["DeltaELO"],
+                        "ELOBeforeMatch": elo_before_match,
+                    }
+                )
+
+            calculated_elo = elo_before_match
+
+        if not elo_history:
+            raise HTTPException(status_code=404, detail="No data found for the given Player ID and date range.")
+
+        if date_range is not None:
+            current_elo = elo_history[0]["ELOBeforeMatch"] + elo_history[0]["DeltaELO"]
 
         return {
             "PlayerID": player_id,

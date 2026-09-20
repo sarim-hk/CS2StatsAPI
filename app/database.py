@@ -835,13 +835,16 @@ def fetch_player_stats_for_rounds(cursor, round_ids, player_id, utility_weapons)
     )
     return cursor.fetchone()
 
-def insert_map(cursor, map_id):
+def insert_map(cursor, map_id, workshop_id=None, thumbnail=None):
     cursor.execute(
         """
-        INSERT IGNORE INTO CS2S_Map (MapID)
-        VALUES (%s);
+        INSERT INTO CS2S_Map (MapID, WorkshopID, Thumbnail)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            WorkshopID = COALESCE(VALUES(WorkshopID), WorkshopID),
+            Thumbnail = COALESCE(VALUES(Thumbnail), Thumbnail);
         """,
-        (map_id,),
+        (map_id, workshop_id, thumbnail),
     )
 
 def insert_match(cursor, map_id, start_tick, end_tick):

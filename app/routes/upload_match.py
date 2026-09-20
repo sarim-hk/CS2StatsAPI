@@ -2,6 +2,9 @@ import gzip
 import json
 import math
 import secrets
+import urllib.error
+import urllib.parse
+import urllib.request
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.routines.calculate_player_rating import refresh_player_ratings_for_db
 from app.config import Settings, get_settings
@@ -40,6 +43,44 @@ PLAYER_ID_FIELDS = (
     "BlindedID",
 )
 
+def get_workshop_thumbnail(workshop_id, steam_api_key: str):
+    query = urllib.parse.urlencode({"key": steam_api_key, "itemcount": 1, "publishedfileids[0]": workshop_id})
+    url = "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
+    request = urllib.request.Request(
+        url,
+        data=query.encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            if not 200 <= response.status < 300:
+                print(f"[upload_match] Failed to fetch Workshop details. Status={response.status}")
+                return None
+
+            data = json.loads(response.read().decode("utf-8"))
+            details = data.get("response", {}).get("publishedfiledetails", [])
+            if not details:
+                return None
+
+            item = details[0]
+            if item.get("result") != 1:
+                return None
+
+            return item.get("preview_url") or None
+
+    except urllib.error.HTTPError as e:
+        print(f"[upload_match] Workshop HTTP error. Status={e.code}, Error={e}")
+
+    except urllib.error.URLError as e:
+        print(f"[upload_match] Workshop request exception. Error={e}")
+
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"[upload_match] Invalid Workshop response. Error={e}")
+
+    return None
+
 @router.post("/upload_match")
 async def upload_match(request: Request, settings: Settings = Depends(get_settings)):
 
@@ -69,13 +110,25 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
         print("[upload_match] Request body was not valid JSON.")
         raise HTTPException(status_code=400, detail="Invalid JSON payload.") from e
 
+    workshop_id = match_json.get("WorkshopID")
+    thumbnail = None
+    if workshop_id:
+        thumbnail = get_workshop_thumbnail(workshop_id, settings.steam_api_auth_key)
+        print(
+            f"[upload_match] Workshop details fetched. WorkshopID={workshop_id}, "
+            f"Thumbnail={thumbnail}"
+        )
+
     with transaction() as db:
         cursor = db.cursor()
         print("[upload_match] Transaction started.")
 
         try:
-            insert_map(cursor, match_json["MapName"])
-            print(f"[upload_match] Map inserted/confirmed. MapID={match_json['MapName']}")
+            insert_map(cursor, match_json["MapName"], workshop_id, thumbnail)
+            print(
+                f"[upload_match] Map inserted/confirmed. MapID={match_json['MapName']}, "
+                f"WorkshopID={workshop_id}, Thumbnail={thumbnail}"
+            )
 
             match_id = insert_match(cursor, match_json["MapName"], match_json["StartTick"], match_json["EndTick"])
             print(f"[upload_match] Match inserted. MatchID={match_id}")

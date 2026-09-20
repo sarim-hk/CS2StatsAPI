@@ -14,7 +14,7 @@ def create_tables(settings=None):
     CREATE_TABLES_SQL = """
     CREATE TABLE IF NOT EXISTS CS2S_Map (
         MapID varchar(128) PRIMARY KEY NOT NULL,
-        WorkshopID int NULL,
+        WorkshopID bigint NULL,
         Thumbnail varchar(192) NULL
     );
 

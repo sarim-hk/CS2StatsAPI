@@ -1,5 +1,9 @@
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.database import fetch_player_stats_for_rounds, fetch_round_sides_for_player_matches, transaction
 from app.utils.stats import UTILITY_WEAPONS, apply_derived_stats, combine_player_stats, empty_player_stats
@@ -205,10 +209,7 @@ def upsert_player_rating(cursor, player_id, range_days, side, stats):
 
 
 if __name__ == "__main__":
-    import argparse, sys
-
-    if __package__ in (None, ""):
-        sys.path.append(str(Path(__file__).resolve().parents[2]))
+    import argparse
 
     parser = argparse.ArgumentParser(description="Refresh cached player ratings.")
     parser.add_argument("--range-days", type=int, required=True, help="Number of trailing days to include.")

@@ -635,6 +635,34 @@ def fetch_player_weapon_kills(db, player_id, match_ids=None):
     finally:
         cursor.close()
 
+
+def fetch_player_hitgroup_kills(db, player_id, match_ids=None):
+    cursor = db.cursor(dictionary=True)
+    try:
+        match_filter = ""
+        params = [player_id]
+        if match_ids is not None:
+            if not match_ids:
+                return []
+            match_filter = f"AND MatchID IN ({_placeholders(match_ids)})"
+            params.extend(match_ids)
+
+        cursor.execute(
+            f"""
+            SELECT Hitgroup, COUNT(*) AS Kills
+            FROM CS2S_Death
+            WHERE AttackerID = %s
+              AND Hitgroup IN (1, 2, 3, 4, 5, 6, 7, 8)
+              {match_filter}
+            GROUP BY Hitgroup
+            ORDER BY Hitgroup ASC
+            """,
+            params,
+        )
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+
 def fetch_clutches_for_match(cursor, match_id):
     cursor.execute("SELECT * FROM CS2S_Clutch WHERE MatchID = %s", (match_id,))
     return cursor.fetchall()

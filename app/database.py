@@ -652,7 +652,6 @@ def fetch_player_hitgroup_kills(db, player_id, match_ids=None):
             SELECT Hitgroup, COUNT(*) AS Kills
             FROM CS2S_Death
             WHERE AttackerID = %s
-              AND Hitgroup IN (1, 2, 3, 4, 5, 6, 7, 8)
               {match_filter}
             GROUP BY Hitgroup
             ORDER BY Hitgroup ASC

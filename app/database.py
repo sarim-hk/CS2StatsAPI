@@ -28,6 +28,7 @@ def create_tables(settings=None):
     CREATE TABLE IF NOT EXISTS CS2S_Match (
         MatchID int UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
         MapID varchar(128) NOT NULL,
+        MatchName varchar(256) NULL,
         StartTick int UNSIGNED NOT NULL,
         EndTick int UNSIGNED NOT NULL,
         MatchDate datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -874,13 +875,13 @@ def insert_map(cursor, map_id, workshop_id=None, thumbnail=None):
         (map_id, workshop_id, thumbnail),
     )
 
-def insert_match(cursor, map_id, start_tick, end_tick):
+def insert_match(cursor, map_id, match_name, start_tick, end_tick):
     cursor.execute(
         """
-        INSERT INTO CS2S_Match (MapID, StartTick, EndTick)
-        VALUES (%s, %s, %s);
+        INSERT INTO CS2S_Match (MapID, MatchName, StartTick, EndTick)
+        VALUES (%s, %s, %s, %s);
         """,
-        (map_id, start_tick, end_tick),
+        (map_id, match_name, start_tick, end_tick),
     )
     return cursor.lastrowid
 

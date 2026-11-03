@@ -130,7 +130,7 @@ async def upload_match(request: Request, settings: Settings = Depends(get_settin
                 f"WorkshopID={workshop_id}, Thumbnail={thumbnail}"
             )
 
-            match_id = insert_match(cursor, match_json["MapName"], match_json["StartTick"], match_json["EndTick"])
+            match_id = insert_match(cursor, match_json["MapName"], match_json["MatchName"], match_json["StartTick"], match_json["EndTick"])
             print(f"[upload_match] Match inserted. MatchID={match_id}")
 
             for team in match_json["Teams"].values():

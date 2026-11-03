@@ -11,6 +11,7 @@ from .team_panel import router as team_router
 from .teamelo_panel import router as teamelo_router
 from .upload_match import router as upload_match_router
 from .upload_player import router as upload_player_router
+from .download_demo import router as download_demo_router
 
 router = APIRouter()
 
@@ -26,3 +27,4 @@ router.include_router(team_router)
 router.include_router(teamelo_router)
 router.include_router(upload_match_router)
 router.include_router(upload_player_router)
+router.include_router(download_demo_router)

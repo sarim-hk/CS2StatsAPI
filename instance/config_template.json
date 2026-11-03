@@ -5,5 +5,8 @@
     "MySQLPassword": "",
     "APIAuthKey": "",
     "SteamAPIAuthKey": "",
+    "DatHostEmail": "",
+    "DatHostPassword": "",
+    "DatHostServerID": "",
     "_readme": "Rename this file to `config.json` and input details above ^^"
 }

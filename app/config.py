@@ -10,6 +10,9 @@ class Settings(BaseModel):
     mysql_password: str = Field(alias="MySQLPassword")
     api_auth_key: str = Field(alias="APIAuthKey")
     steam_api_auth_key: str = Field(alias="SteamAPIAuthKey")
+    dathost_email: str = Field(default="", alias="DatHostEmail")
+    dathost_password: str = Field(default="", alias="DatHostPassword")
+    dathost_server_id: str = Field(default="", alias="DatHostServerID")
 
 def _config_path():
     return Path(__file__).resolve().parent.parent / "instance" / "config.json"

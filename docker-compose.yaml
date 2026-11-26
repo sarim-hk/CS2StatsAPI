@@ -1,0 +1,37 @@
+x-app: &app
+  image: cs2statsapi:local
+  build: .
+  restart: unless-stopped
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  eco:
+    <<: *app
+    container_name: eco
+    expose:
+      - "5000"
+    volumes:
+      - ./instances/eco/config.json:/app/instance/config.json
+    environment:
+      - INSTANCE_ID=1
+
+  mapink:
+    <<: *app
+    container_name: mapink
+    expose:
+      - "5000"
+    volumes:
+      - ./instances/mapink/config.json:/app/instance/config.json
+    environment:
+      - INSTANCE_ID=2
+
+  eagleone:
+    <<: *app
+    container_name: eagleone
+    expose:
+      - "5000"
+    volumes:
+      - ./instances/eagleone/config.json:/app/instance/config.json
+    environment:
+      - INSTANCE_ID=3

@@ -1,9 +1,11 @@
 __pycache__
-config.json
 .venv
 venv
-Caddyfile
-docker-compose.yml
-start.sh
 .vscode
+Caddyfile
+start.sh
+instance/
+instances/
+.env
+config.json
 *.json

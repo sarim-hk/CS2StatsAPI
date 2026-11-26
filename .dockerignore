@@ -1,0 +1,7 @@
+instance/
+instances/
+.env
+.git
+.github
+.vscode
+__pycache__
